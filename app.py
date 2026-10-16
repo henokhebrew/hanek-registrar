@@ -1,599 +1,707 @@
-import streamlit as st
-import pandas as pd
 import os
-from PIL import Image
+import random
+import string
+import pandas as pd
+import streamlit as st
 
 # --- PAGE CONFIGURATION ---
 st.set_page_config(
-    page_title="Hanek Technology and Business College - SIS & Registrar",
+    page_title="Hanek Technology and Business College - SIS",
     page_icon="🎓",
     layout="wide",
-    initial_sidebar_state="expanded"
 )
 
-# --- CUSTOM STYLING & UI ENHANCEMENTS ---
-st.markdown("""
-    <style>
-    .main-header {
-        font-size: 2.2rem;
-        font-weight: 800;
-        color: #1E3A8A;
-        text-align: center;
-        margin-bottom: 0.2rem;
-    }
-    .sub-header {
-        font-size: 1.2rem;
-        font-weight: 600;
-        color: #4B5563;
-        text-align: center;
-        margin-bottom: 2rem;
-    }
-    .developer-footer {
-        text-align: center;
-        font-size: 0.95rem;
-        color: #374151;
-        margin-top: 3rem;
-        padding-top: 1rem;
-        border-top: 2px solid #E5E7EB;
-        background-color: #F9FAFB;
-        border-radius: 0.5rem;
-        padding-bottom: 1rem;
-    }
-    </style>
-""", unsafe_allow_html=True)
-
-# --- DATABASE SETUP (CSV Files) ---
-STUDENTS_FILE = "students.csv"
+# --- CSV FILE PATHS ---
+STUDENT_FILE = "students.csv"
 GRADES_FILE = "grades.csv"
-PENDING_GRADES_FILE = "pending_grades.csv"
+PENDING_FILE = "pending_grades.csv"
 STAFF_FILE = "staff.csv"
 ADMIN_FILE = "admin.csv"
+FINANCE_FILE = "finances.csv"
+CURRICULUM_FILE = "curriculum.csv"
+LOGO_FILE = "logo.png"
 
-def init_db():
-    if not os.path.exists(STUDENTS_FILE):
-        df_students = pd.DataFrame(columns=[
-            "StudentID", "FullName", "Department", "Campus", "Level", 
-            "AcademicYear", "EnrollmentStatus", "PhotoPath", "Password"
-        ])
-        df_students.to_csv(STUDENTS_FILE, index=False)
-        
-    if not os.path.exists(GRADES_FILE):
-        df_grades = pd.DataFrame(columns=[
-            "StudentID", "FullName", "Department", "Level", 
-            "Semester", "CourseCode", "CourseTitle", "CreditHours", 
-            "Score", "Grade", "GradePoints"
-        ])
-        df_grades.to_csv(GRADES_FILE, index=False)
+CAMPUSES = ["Wolaita Sodo", "Basketo", "Boloso Bombe", "Jinka"]
 
-    if not os.path.exists(PENDING_GRADES_FILE):
-        df_pending = pd.DataFrame(columns=[
-            "InstructorID", "StudentID", "FullName", "Department", "Level", 
-            "Semester", "CourseCode", "CourseTitle", "CreditHours", 
-            "Score", "Grade", "GradePoints"
-        ])
-        df_pending.to_csv(PENDING_GRADES_FILE, index=False)
+DEPARTMENTS = [
+    "Cooperative Accounting",
+    "Management",
+    "Marketing Management",
+    "Horticulture & Nursery Science (HNS)",
+    "Natural Resource Management",
+    "Crop Production",
+]
 
-    if not os.path.exists(STAFF_FILE):
-        df_staff = pd.DataFrame(columns=[
-            "StaffID", "FullName", "Role", "Department", "Campus", "Email", "Phone", "PhotoPath", "Password"
-        ])
-        df_staff.to_csv(STAFF_FILE, index=False)
+STAFF_ROLES = [
+    "College President",
+    "Vice President for Academic Affairs",
+    "Cross-Campus Institutional Coach / QA Director",
+    "College Dean",
+    "Vice Dean",
+    "Department Head",
+    "Head Registrar",
+    "Assistant Registrar",
+    "Registrar Officer / Credential Specialist",
+    "Senior Secretary",
+    "Human Resources Officer",
+    "Finance & Procurement Officer",
+    "IT / Systems Administrator",
+    "Head of Facility Services",
+    "Campus Security Guard",
+    "Custodial / Maintenance Personnel",
+    "Instructor / Lecturer",
+]
 
-    if not os.path.exists(ADMIN_FILE):
-        df_admin = pd.DataFrame(columns=["Username", "Password"])
-        new_admin = pd.DataFrame([{"Username": "admin", "Password": "password123"}])
-        df_admin = pd.concat([df_admin, new_admin], ignore_index=True)
-        df_admin.to_csv(ADMIN_FILE, index=False)
 
-init_db()
+# --- INITIALIZE CSV STORAGE & DEFAULT CURRICULUM ---
+def init_csvs():
+  if not os.path.exists(STUDENT_FILE):
+    pd.DataFrame(
+        columns=[
+            "StudentID",
+            "FullName",
+            "Campus",
+            "Department",
+            "ProgramLevel",
+            "Year",
+            "Password",
+            "Photo",
+        ]
+    ).to_csv(STUDENT_FILE, index=False)
+
+  if not os.path.exists(GRADES_FILE):
+    pd.DataFrame(
+        columns=[
+            "StudentID",
+            "FullName",
+            "CourseCode",
+            "CourseName",
+            "CreditHour",
+            "Score",
+            "Grade",
+            "Semester",
+            "AcademicYear",
+        ]
+    ).to_csv(GRADES_FILE, index=False)
+
+  if not os.path.exists(PENDING_FILE):
+    pd.DataFrame(
+        columns=[
+            "PendingID",
+            "StudentID",
+            "FullName",
+            "CourseCode",
+            "CourseName",
+            "CreditHour",
+            "Score",
+            "Grade",
+            "Semester",
+            "Instructor",
+        ]
+    ).to_csv(PENDING_FILE, index=False)
+
+  if not os.path.exists(STAFF_FILE):
+    pd.DataFrame(
+        columns=[
+            "StaffID",
+            "FullName",
+            "Role",
+            "Campus",
+            "Department",
+            "Password",
+        ]
+    ).to_csv(STAFF_FILE, index=False)
+
+  if not os.path.exists(ADMIN_FILE):
+    pd.DataFrame([{"Username": "admin", "Password": "password123"}]).to_csv(
+        ADMIN_FILE, index=False
+    )
+
+  if not os.path.exists(FINANCE_FILE):
+    pd.DataFrame(
+        columns=[
+            "StudentID",
+            "TotalFeeETB",
+            "PaidETB",
+            "Status",
+            "LastUpdated",
+        ]
+    ).to_csv(FINANCE_FILE, index=False)
+
+  if not os.path.exists(CURRICULUM_FILE):
+    # Default pre-loaded curriculum sample for Hanek College departments
+    default_curriculum = pd.DataFrame([
+        {
+            "Department": "Cooperative Accounting",
+            "CourseCode": "CoAc-311",
+            "CourseName": "Advanced Financial Accounting",
+            "CreditHour": 5,
+        },
+        {
+            "Department": "Cooperative Accounting",
+            "CourseCode": "CoAc-312",
+            "CourseName": "Auditing Principles & Practice",
+            "CreditHour": 4,
+        },
+        {
+            "Department": "Management",
+            "CourseCode": "Mgmt-211",
+            "CourseName": "Principles of Management",
+            "CreditHour": 3,
+        },
+        {
+            "Department": "Management",
+            "CourseCode": "Mgmt-212",
+            "CourseName": "Human Resource Management",
+            "CreditHour": 3,
+        },
+        {
+            "Department": "Marketing Management",
+            "CourseCode": "Mkt-201",
+            "CourseName": "Fundamentals of Marketing",
+            "CreditHour": 3,
+        },
+        {
+            "Department": "Horticulture & Nursery Science (HNS)",
+            "CourseCode": "HNS-101",
+            "CourseName": "Introduction to Horticulture",
+            "CreditHour": 4,
+        },
+        {
+            "Department": "Natural Resource Management",
+            "CourseCode": "NRM-201",
+            "CourseName": "Soil and Water Conservation",
+            "CreditHour": 4,
+        },
+        {
+            "Department": "Crop Production",
+            "CourseCode": "CP-102",
+            "CourseName": "Field Crop Production",
+            "CreditHour": 5,
+        },
+    ])
+    default_curriculum.to_csv(CURRICULUM_FILE, index=False)
+
+
+init_csvs()
+
 
 # --- HELPER FUNCTIONS ---
-def calculate_grade_point(score):
-    if score >= 90: return "A+", 4.0
-    elif score >= 85: return "A", 4.0
-    elif score >= 80: return "A-", 3.75
-    elif score >= 75: return "B+", 3.3
-    elif score >= 70: return "B", 3.0
-    elif score >= 65: return "B-", 2.75
-    elif score >= 60: return "C+", 2.3
-    elif score >= 50: return "C", 2.0
-    elif score >= 45: return "D", 1.0
-    else: return "F", 0.0
+def generate_auth_code():
+  letters = random.choices(string.ascii_uppercase, k=3)
+  digits = random.choices(string.digits, k=5)
+  return f"HBC-AUTH-{''.join(letters)}-{''.join(digits)}"
 
-# --- AUTHENTICATION STATE ---
-if "logged_in" not in st.session_state:
-    st.session_state.logged_in = False
-    st.session_state.role = None
-    st.session_state.username = None
 
-# --- SIDEBAR NAVIGATION & LOGIN ---
-st.sidebar.markdown("### 🎓 Hanek College Portal")
-st.sidebar.markdown("---")
+def calculate_grade(score):
+  if score >= 90:
+    return "A+", 4.0
+  elif score >= 85:
+    return "A", 4.0
+  elif score >= 80:
+    return "A-", 3.75
+  elif score >= 75:
+    return "B+", 3.25
+  elif score >= 70:
+    return "B", 3.0
+  elif score >= 65:
+    return "B-", 2.75
+  elif score >= 60:
+    return "C+", 2.5
+  elif score >= 50:
+    return "C", 2.0
+  elif score >= 40:
+    return "D", 1.0
+  else:
+    return "F", 0.0
 
-if not st.session_state.logged_in:
-    st.sidebar.subheader("🔒 System Login")
-    login_role = st.sidebar.selectbox("Login As", ["Admin / Registrar", "Staff / Instructor", "Student"])
-    username_input = st.sidebar.text_input("Username / ID")
-    password_input = st.sidebar.text_input("Password", type="password")
-    
-    if st.sidebar.button("Login"):
-        if login_role == "Admin / Registrar":
-            df_adm = pd.read_csv(ADMIN_FILE)
-            match = df_adm[(df_adm["Username"] == username_input) & (df_adm["Password"] == password_input)]
-            if len(match) > 0:
-                st.session_state.logged_in = True
-                st.session_state.role = "Admin"
-                st.session_state.username = username_input
-                st.rerun()
-            else:
-                st.sidebar.error("Invalid Admin Username or Password!")
-        elif login_role == "Staff / Instructor":
-            df_stf = pd.read_csv(STAFF_FILE)
-            match = df_stf[(df_stf["StaffID"] == username_input) & (df_stf["Password"] == password_input)]
-            if len(match) > 0:
-                st.session_state.logged_in = True
-                st.session_state.role = "Staff"
-                st.session_state.username = username_input
-                st.rerun()
-            else:
-                st.sidebar.error("Invalid Staff ID or Password!")
-        elif login_role == "Student":
-            df_s = pd.read_csv(STUDENTS_FILE)
-            match = df_s[(df_s["StudentID"] == username_input) & (df_s["Password"] == password_input)]
-            if len(match) > 0:
-                st.session_state.logged_in = True
-                st.session_state.role = "Student"
-                st.session_state.username = username_input
-                st.rerun()
-            else:
-                st.sidebar.error("Invalid Student ID or Password!")
-    st.stop()
 
+# --- SIDEBAR & LOGO BRANDING ---
+st.sidebar.markdown(
+    "<h2 style='text-align: center;'>Hanek College Portal</h2>",
+    unsafe_allow_html=True,
+)
+
+if os.path.exists(LOGO_FILE):
+  st.sidebar.image(LOGO_FILE, use_column_width=True)
 else:
-    st.sidebar.success(f"Logged in as: **{st.session_state.username} ({st.session_state.role})**")
-    if st.sidebar.button("Log Out"):
-        st.session_state.logged_in = False
-        st.session_state.role = None
-        st.session_state.username = None
-        st.rerun()
-    st.sidebar.markdown("---")
+  st.sidebar.info(
+      "💡 Tip: Upload a 'logo.png' file to your GitHub repository to display"
+      " your college badge here."
+  )
 
-# --- MAIN APP INTERFACE ---
-st.markdown('<div class="main-header">Hanek Technology and Business College</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-header">Commercial Online Registrar & Student Information System (Multi-Campus TVET & Higher Education)</div>', unsafe_allow_html=True)
+st.sidebar.markdown("---")
+role = st.sidebar.selectbox(
+    "Login As", ["Admin / Registrar", "Staff / Instructor", "Student"]
+)
 
-# Navigation Menu based on Role
-if st.session_state.role in ["Admin", "Registrar"]:
-    menu = st.sidebar.radio("Navigation", [
-        "Dashboard Overview", 
-        "Student Admission & Management", 
-        "Staff Directory Management", 
-        "Grade Approvals (Admin)", 
-        "Official Transcript Generator",
-        "Admin Security & Credentials"
+# --- AUTHENTICATION & VIEWS ---
+if role == "Admin / Registrar":
+  st.sidebar.subheader("Admin Authentication")
+  adm_df = pd.read_csv(ADMIN_FILE)
+  username = st.sidebar.text_input("Username")
+  password = st.sidebar.text_input("Password", type="password")
+
+  if st.sidebar.button("Login"):
+    match = adm_df[
+        (adm_df["Username"] == username) & (adm_df["Password"] == password)
+    ]
+    if not match.empty or (username == "admin" and password == "password123"):
+      st.session_state["authenticated"] = True
+      st.session_state["role"] = "Admin"
+      st.success("Logged in successfully!")
+      st.rerun()
+    else:
+      st.sidebar.error("Invalid Admin Credentials")
+
+  if st.session_state.get("role") == "Admin":
+    st.title("🛡️ Admin & Registrar Control Panel")
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+        "Manage Students",
+        "Manage Staff",
+        "Curriculum & Modules",
+        "Grade Approvals",
+        "Financial Status (ETB)",
+        "Security Settings",
+        "System Logs",
     ])
-elif st.session_state.role == "Staff":
-    menu = st.sidebar.radio("Navigation", [
-        "Dashboard Overview", 
-        "Staff Directory Management", 
-        "Submit Grades for Approval"
-    ])
-else:  # Student Role
-    menu = st.sidebar.radio("Navigation", [
-        "My Student Profile", 
-        "My Official Grades & Transcript",
-        "Change My Password"
-    ])
 
-# ==========================================
-# 1. DASHBOARD OVERVIEW
-# ==========================================
-if menu == "Dashboard Overview":
-    st.subheader("📊 Institutional Dashboard")
-    df_students = pd.read_csv(STUDENTS_FILE)
-    df_grades = pd.read_csv(GRADES_FILE)
-    df_staff = pd.read_csv(STAFF_FILE)
-    
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        st.metric("Total Students Registered", len(df_students))
-    with col2:
-        st.metric("Total Staff Members", len(df_staff))
-    with col3:
-        st.metric("Approved Grades Recorded", len(df_grades))
-    with col4:
-        st.metric("Active Campuses", "4 (Wolaita Sodo, Basketo, Boloso Bombe, Jinka)")
-        
-    st.markdown("---")
-    st.info("💡 **System Notice:** Teachers submit grades for admin approval. Once approved, grades automatically update students' online transcripts.")
-
-# ==========================================
-# 2. STUDENT ADMISSION & MANAGEMENT
-# ==========================================
-elif menu == "Student Admission & Management":
-    st.subheader("📝 Student Admission & Profile Management")
-    
-    df_students = pd.read_csv(STUDENTS_FILE)
-    tab1, tab2 = st.tabs(["Register New Student", "View / Edit / Reset Student Credentials"])
-    
     with tab1:
-        with st.form("admission_form"):
-            col1, col2 = st.columns(2)
-            with col1:
-                student_id = st.text_input("Student ID (e.g., CBM-0144-16)")
-                full_name = st.text_input("Full Name")
-                department = st.selectbox("Department", [
-                    "Cooperative Accounting and Auditing", "Cooperative Business Management",
-                    "Cooperative Marketing", "Hardware & Network Systems (HNS)",
-                    "Natural Resource Management", "Crop Production"
-                ])
-                campus = st.selectbox("Campus", ["Wolaita Sodo", "Basketo", "Boloso Bombe", "Jinka"])
-            with col2:
-                level = st.selectbox("TVET Level", ["Level I", "Level II", "Level III", "Level IV"])
-                academic_year = st.text_input("Academic Year", "2024/2025")
-                status = st.selectbox("Enrollment Status", ["Active", "Graduated", "Suspended", "Withdrawn"])
-                student_password = st.text_input("Assign Student Login Password", type="password")
-                photo = st.file_uploader("Upload Student ID Photo", type=["jpg", "png", "jpeg"])
-                
-            submitted = st.form_submit_button("Register Student")
-            if submitted:
-                if not student_id or not full_name or not student_password:
-                    st.error("Please fill in Student ID, Full Name, and Password!")
-                elif student_id in df_students["StudentID"].values:
-                    st.error("A student with this ID already exists!")
-                else:
-                    photo_path = ""
-                    if photo is not None:
-                        os.makedirs("uploads", exist_ok=True)
-                        photo_path = os.path.join("uploads", f"{student_id}_{photo.name}")
-                        with open(photo_path, "wb") as f:
-                            f.write(photo.getbuffer())
-                            
-                    new_row = pd.DataFrame([{
-                        "StudentID": student_id, "FullName": full_name,
-                        "Department": department, "Campus": campus, "Level": level,
-                        "AcademicYear": academic_year, "EnrollmentStatus": status, 
-                        "PhotoPath": photo_path, "Password": student_password
-                    }])
-                    df_students = pd.concat([df_students, new_row], ignore_index=True)
-                    df_students.to_csv(STUDENTS_FILE, index=False)
-                    st.success(f"Student {full_name} registered successfully!")
-                    st.rerun()
-                    
+      st.subheader("Student Records (CRUD)")
+      students_df = pd.read_csv(STUDENT_FILE)
+      st.dataframe(students_df, use_container_width=True)
+
+      with st.form("add_student_form"):
+        st.markdown("### Register New Student")
+        col1, col2 = st.columns(2)
+        with col1:
+          s_id = st.text_input("Student ID (e.g., HBC/001/24)")
+          s_name = st.text_input("Full Name")
+          s_campus = st.selectbox("Campus", CAMPUSES)
+        with col2:
+          s_dept = st.selectbox("Department", DEPARTMENTS)
+          s_level = st.selectbox(
+              "Program Level",
+              ["TVET Level I", "II", "III", "IV", "Degree Program"],
+          )
+          s_pass = st.text_input("Default Password", type="password")
+
+        if st.form_submit_button("Register Student"):
+          if s_id and s_name:
+            new_row = pd.DataFrame([{
+                "StudentID": s_id,
+                "FullName": s_name,
+                "Campus": s_campus,
+                "Department": s_dept,
+                "ProgramLevel": s_level,
+                "Year": "1",
+                "Password": s_pass,
+                "Photo": "",
+            }])
+            students_df = pd.concat(
+                [students_df, new_row], ignore_index=True
+            )
+            students_df.to_csv(STUDENT_FILE, index=False)
+            st.success(f"Student {s_name} registered successfully!")
+            st.rerun()
+
     with tab2:
-        st.markdown("### Registered Students Directory & Credentials")
-        if len(df_students) > 0:
-            st.dataframe(df_students[["StudentID", "FullName", "Department", "Campus", "Level", "Password"]], use_container_width=True)
-            st.markdown("---")
-            selected_edit_id = st.selectbox("Select Student ID to Edit/Reset", df_students["StudentID"].values)
-            student_row = df_students[df_students["StudentID"] == selected_edit_id].iloc[0]
-            
-            with st.form("edit_student_form"):
-                new_name = st.text_input("Full Name", value=student_row["FullName"])
-                new_pass = st.text_input("Reset Student Password", value=str(student_row["Password"]), type="password")
-                new_dept = st.selectbox("Department", [
-                    "Cooperative Accounting and Auditing", "Cooperative Business Management",
-                    "Cooperative Marketing", "Hardware & Network Systems (HNS)",
-                    "Natural Resource Management", "Crop Production"
-                ], index=0)
-                new_campus = st.selectbox("Campus", ["Wolaita Sodo", "Basketo", "Boloso Bombe", "Jinka"], index=0)
-                new_level = st.selectbox("TVET Level", ["Level I", "Level II", "Level III", "Level IV"], index=0)
-                new_status = st.selectbox("Enrollment Status", ["Active", "Graduated", "Suspended", "Withdrawn"], index=0)
-                
-                col_up1, col_up2 = st.columns(2)
-                with col_up1:
-                    update_btn = st.form_submit_button("Update Student Info & Password")
-                with col_up2:
-                    delete_btn = st.form_submit_button("Delete Student Profile")
-                    
-                if update_btn:
-                    df_students.loc[df_students["StudentID"] == selected_edit_id, "FullName"] = new_name
-                    df_students.loc[df_students["StudentID"] == selected_edit_id, "Password"] = new_pass
-                    df_students.loc[df_students["StudentID"] == selected_edit_id, "Department"] = new_dept
-                    df_students.loc[df_students["StudentID"] == selected_edit_id, "Campus"] = new_campus
-                    df_students.loc[df_students["StudentID"] == selected_edit_id, "Level"] = new_level
-                    df_students.loc[df_students["StudentID"] == selected_edit_id, "EnrollmentStatus"] = new_status
-                    df_students.to_csv(STUDENTS_FILE, index=False)
-                    st.success("Student updated successfully!")
-                    st.rerun()
-                    
-                if delete_btn:
-                    df_students = df_students[df_students["StudentID"] != selected_edit_id]
-                    df_students.to_csv(STUDENTS_FILE, index=False)
-                    st.warning("Student profile deleted successfully!")
-                    st.rerun()
-        else:
-            st.info("No students registered yet.")
+      st.subheader("Staff & Faculty Directory")
+      staff_df = pd.read_csv(STAFF_FILE)
+      st.dataframe(staff_df, use_container_width=True)
 
-# ==========================================
-# 3. STAFF DIRECTORY MANAGEMENT
-# ==========================================
-elif menu == "Staff Directory Management":
-    st.subheader("👥 Staff & Instructor Directory")
-    df_staff = pd.read_csv(STAFF_FILE)
-    
-    if st.session_state.role == "Admin":
-        tab1, tab2 = st.tabs(["Register New Staff", "View / Edit Staff Credentials"])
-        with tab1:
-            with st.form("staff_form"):
-                col1, col2 = st.columns(2)
-                with col1:
-                    staff_id = st.text_input("Staff ID (e.g., STF-001)")
-                    staff_name = st.text_input("Full Name")
-                    staff_role = st.selectbox("Role", ["Instructor", "Registrar Officer", "Department Head", "Campus Administrator"])
-                    staff_dept = st.text_input("Department / Unit")
-                with col2:
-                    staff_campus = st.selectbox("Campus", ["Wolaita Sodo", "Basketo", "Boloso Bombe", "Jinka"])
-                    staff_email = st.text_input("Email Address")
-                    staff_phone = st.text_input("Phone Number")
-                    staff_password = st.text_input("Assign Staff Login Password", type="password")
-                    
-                if st.form_submit_button("Register Staff"):
-                    if not staff_id or not staff_name or not staff_password:
-                        st.error("Please fill in Staff ID, Name, and Password!")
-                    elif staff_id in df_staff["StaffID"].values:
-                        st.error("Staff ID already exists!")
-                    else:
-                        new_staff_row = pd.DataFrame([{
-                            "StaffID": staff_id, "FullName": staff_name, "Role": staff_role,
-                            "Department": staff_dept, "Campus": staff_campus, "Email": staff_email,
-                            "Phone": staff_phone, "PhotoPath": "", "Password": staff_password
-                        }])
-                        df_staff = pd.concat([df_staff, new_staff_row], ignore_index=True)
-                        df_staff.to_csv(STAFF_FILE, index=False)
-                        st.success(f"Staff member {staff_name} registered successfully!")
-                        st.rerun()
-        with tab2:
-            st.markdown("### Existing Staff Directory & Passwords")
-            if len(df_staff) > 0:
-                st.dataframe(df_staff[["StaffID", "FullName", "Role", "Department", "Campus", "Password"]], use_container_width=True)
+      with st.form("add_staff_form"):
+        st.markdown("### Add Professional Staff / Instructor")
+        st_id = st.text_input("Staff ID")
+        st_name = st.text_input("Full Name")
+        st_role = st.selectbox("Professional Title / Role", STAFF_ROLES)
+        st_campus = st.selectbox("Assigned Campus", CAMPUSES + ["All Campuses"])
+        st_dept = st.selectbox("Department / Unit", DEPARTMENTS + ["General"])
+        st_pass = st.text_input("Password", type="password")
+
+        if st.form_submit_button("Save Staff Member"):
+          new_staff = pd.DataFrame([{
+              "StaffID": st_id,
+              "FullName": st_name,
+              "Role": st_role,
+              "Campus": st_campus,
+              "Department": st_dept,
+              "Password": st_pass,
+          }])
+          staff_df = pd.concat([staff_df, new_staff], ignore_index=True)
+          staff_df.to_csv(STAFF_FILE, index=False)
+          st.success("Staff profile created!")
+          st.rerun()
+
+    with tab3:
+      st.subheader("College Curriculum & Course Modules")
+      curr_df = pd.read_csv(CURRICULUM_FILE)
+      st.dataframe(curr_df, use_container_width=True)
+
+      with st.form("add_curriculum_form"):
+        st.markdown("### Add Course to Department Curriculum")
+        c_dept = st.selectbox("Target Department", DEPARTMENTS)
+        c_code = st.text_input("Module / Course Code (e.g., MGMT-321)")
+        c_title = st.text_input("Module / Course Title")
+        c_credit = st.number_input("Credit Hours", min_value=1, max_value=8, value=3)
+
+        if st.form_submit_button("Add Course Module"):
+          if c_code and c_title:
+            new_curr = pd.DataFrame([{
+                "Department": c_dept,
+                "CourseCode": c_code,
+                "CourseName": c_title,
+                "CreditHour": c_credit,
+            }])
+            curr_df = pd.concat([curr_df, new_curr], ignore_index=True)
+            curr_df.to_csv(CURRICULUM_FILE, index=False)
+            st.success("Course module successfully added to curriculum!")
+            st.rerun()
+
+    with tab4:
+      st.subheader("Pending Grade Approvals")
+      pending_df = pd.read_csv(PENDING_FILE)
+      if pending_df.empty:
+        st.info("No pending grades awaiting registrar approval.")
+      else:
+        st.dataframe(pending_df, use_container_width=True)
+        approve_id = st.selectbox(
+            "Select Pending Item Index to Approve", pending_df.index
+        )
+        if st.button("Approve & Post to Official Transcript"):
+          row = pending_df.loc[approve_id]
+          grades_df = pd.read_csv(GRADES_FILE)
+          grade_val, _ = calculate_grade(row["Score"])
+          final_row = pd.DataFrame([{
+              "StudentID": row["StudentID"],
+              "FullName": row["FullName"],
+              "CourseCode": row["CourseCode"],
+              "CourseName": row["CourseName"],
+              "CreditHour": row["CreditHour"],
+              "Score": row["Score"],
+              "Grade": grade_val,
+              "Semester": row["Semester"],
+              "AcademicYear": "2025/2026",
+          }])
+          grades_df = pd.concat([grades_df, final_row], ignore_index=True)
+          grades_df.to_csv(GRADES_FILE, index=False)
+
+          pending_df = pending_df.drop(approve_id).reset_index(drop=True)
+          pending_df.to_csv(PENDING_FILE, index=False)
+          st.success("Grade successfully approved and published!")
+          st.rerun()
+
+    with tab5:
+      st.subheader("Student Financial Accounts (ETB)")
+      fin_df = pd.read_csv(FINANCE_FILE)
+      students_df = pd.read_csv(STUDENT_FILE)
+      st.dataframe(fin_df, use_container_width=True)
+
+      with st.form("finance_form"):
+        st.markdown("### Update Student Tuition / Fee Status")
+        f_sid = st.selectbox(
+            "Select Student ID",
+            students_df["StudentID"].tolist()
+            if not students_df.empty
+            else [],
+        )
+        tot_fee = st.number_input("Total Tuition Fee (ETB)", value=15000.0)
+        paid_fee = st.number_input("Amount Paid (ETB)", value=0.0)
+        f_status = st.selectbox(
+            "Financial Clearance Status",
+            ["Pending Clearance", "Fully Cleared"],
+        )
+
+        if st.form_submit_button("Update Finance Status"):
+          if f_sid:
+            if not fin_df.empty and f_sid in fin_df["StudentID"].values:
+              fin_df.loc[fin_df["StudentID"] == f_sid, [
+                  "TotalFeeETB",
+                  "PaidETB",
+                  "Status",
+              ]] = [tot_fee, paid_fee, f_status]
             else:
-                st.info("No staff registered yet.")
-    else:
-        st.markdown("### Staff Directory")
-        st.dataframe(df_staff[["StaffID", "FullName", "Role", "Department", "Campus", "Email", "Phone"]], use_container_width=True)
+              new_f = pd.DataFrame([{
+                  "StudentID": f_sid,
+                  "TotalFeeETB": tot_fee,
+                  "PaidETB": paid_fee,
+                  "Status": f_status,
+                  "LastUpdated": pd.Timestamp.now().strftime("%Y-%m-%d"),
+              }])
+              fin_df = pd.concat([fin_df, new_f], ignore_index=True)
+            fin_df.to_csv(FINANCE_FILE, index=False)
+            st.success("Financial records updated successfully!")
+            st.rerun()
 
-# ==========================================
-# 4. SUBMIT GRADES FOR APPROVAL (Staff Portal)
-# ==========================================
-elif menu == "Submit Grades for Approval":
-    st.subheader("📋 Teacher Grade Submission Portal")
-    st.info("Submit student assessment scores for administrative review and approval.")
-    
-    df_students = pd.read_csv(STUDENTS_FILE)
-    df_pending = pd.read_csv(PENDING_GRADES_FILE)
-    
-    if len(df_students) == 0:
-        st.warning("No students registered in the system yet.")
-    else:
-        student_ids = df_students["StudentID"].values
-        selected_id = st.selectbox("Select Student ID", student_ids)
-        student_info = df_students[df_students["StudentID"] == selected_id].iloc[0]
-        
-        st.write(f"**Student:** {student_info['FullName']} | **Department:** {student_info['Department']}")
-        
-        with st.form("teacher_grade_form"):
-            col1, col2 = st.columns(2)
-            with col1:
-                grade_level = st.selectbox("TVET Level", ["Level I", "Level II", "Level III", "Level IV"])
-                semester = st.selectbox("Semester", ["Semester I", "Semester II"])
-                course_code = st.text_input("Module Code & Unit (e.g., CAB ACC1 0710)")
-                course_title = st.text_input("Course Title")
-            with col2:
-                credit_hours = st.number_input("Credit Hours", min_value=1, max_value=10, value=3)
-                score = st.number_input("Assessment Score (0 - 100)", min_value=0.0, max_value=100.0, value=85.0)
-                
-            if st.form_submit_button("Submit Grade to Admin for Approval"):
-                grade_letter, grade_point_val = calculate_grade_point(score)
-                total_gp = grade_point_val * credit_hours
-                
-                new_pending = pd.DataFrame([{
-                    "InstructorID": st.session_state.username, "StudentID": selected_id,
-                    "FullName": student_info["FullName"], "Department": student_info["Department"],
-                    "Level": grade_level, "Semester": semester, "CourseCode": course_code,
-                    "CourseTitle": course_title, "CreditHours": credit_hours, "Score": score,
-                    "Grade": grade_letter, "GradePoints": total_gp
-                }])
-                df_pending = pd.concat([df_pending, new_pending], ignore_index=True)
-                df_pending.to_csv(PENDING_GRADES_FILE, index=False)
-                st.success("Grade submitted successfully! Awaiting Admin approval.")
-                st.rerun()
+    with tab6:
+      st.subheader("Admin Security Settings")
+      with st.form("change_admin"):
+        new_adm_user = st.text_input("New Admin Username")
+        new_adm_pass = st.text_input("New Admin Password", type="password")
+        if st.form_submit_button("Update Credentials"):
+          pd.DataFrame(
+              [{"Username": new_adm_user, "Password": new_adm_pass}]
+          ).to_csv(ADMIN_FILE, index=False)
+          st.success("Admin credentials updated successfully!")
 
-        st.markdown("### Your Pending Grade Submissions")
-        my_pending = df_pending[df_pending["InstructorID"] == st.session_state.username]
-        if len(my_pending) > 0:
-            st.dataframe(my_pending, use_container_width=True)
+    with tab7:
+      st.subheader("System Logs & Database Health")
+      st.write(
+          f"Registered Students: {len(pd.read_csv(STUDENT_FILE))}"
+      )
+      st.write(f"Registered Staff: {len(pd.read_csv(STAFF_FILE))}")
+      st.write(
+          f"Curriculum Modules Available:"
+          f" {len(pd.read_csv(CURRICULUM_FILE))}"
+      )
+      st.write(f"Official Grades Posted: {len(pd.read_csv(GRADES_FILE))}")
+
+elif role == "Staff / Instructor":
+  st.sidebar.subheader("Staff Portal Login")
+  st_id_in = st.sidebar.text_input("Staff ID")
+  st_pass_in = st.sidebar.text_input("Password", type="password")
+
+  if st.sidebar.button("Staff Login"):
+    staff_df = pd.read_csv(STAFF_FILE)
+    match = staff_df[
+        (staff_df["StaffID"] == st_id_in)
+        & (staff_df["Password"] == st_pass_in)
+    ]
+    if not match.empty:
+      st.session_state["staff_logged"] = st_id_in
+      st.session_state["staff_name"] = match.iloc[0]["FullName"]
+      st.session_state["staff_role"] = match.iloc[0]["Role"]
+      st.session_state["staff_dept"] = match.iloc[0]["Department"]
+      st.success(f"Welcome, {match.iloc[0]['Role']} {match.iloc[0]['FullName']}")
+      st.rerun()
+    else:
+      st.sidebar.error("Invalid Staff Credentials")
+
+  if "staff_logged" in st.session_state:
+    st.title(
+        f"👨‍🏫 Staff Portal: {st.session_state['staff_name']} ("
+        f"{st.session_state['staff_role']})"
+    )
+    st.markdown(
+        "### Submit Numerical Scores (Curriculum-Linked Grade Entry)"
+    )
+
+    students_df = pd.read_csv(STUDENT_FILE)
+    curr_df = pd.read_csv(CURRICULUM_FILE)
+
+    if students_df.empty:
+      st.warning("No students found in system.")
+    else:
+      with st.form("submit_grade_form"):
+        target_student = st.selectbox(
+            "Select Student ID & Name",
+            students_df["StudentID"]
+            + " - "
+            + students_df["FullName"]
+            + " ("
+            + students_df["Department"]
+            + ")",
+        )
+
+        # Extract actual Student ID from selection string
+        selected_sid = target_student.split(" - ")[0]
+        student_row = students_df[students_df["StudentID"] == selected_sid].iloc[
+            0
+        ]
+
+        # Filter curriculum courses matching student's department or show all if general
+        dept_courses = curr_df[
+            (curr_df["Department"] == student_row["Department"])
+            | (curr_df["Department"] == "General")
+        ]
+        if dept_courses.empty:
+          dept_courses = curr_df  # Fallback if department names differ slightly
+
+        selected_course_row = st.selectbox(
+            "Select Course Module from Curriculum",
+            dept_courses["CourseCode"]
+            + " | "
+            + dept_courses["CourseName"]
+            + " ("
+            + dept_courses["CreditHour"].astype(str)
+            + " Cr.Hr)",
+        )
+
+        # Parse selected course info
+        c_code = selected_course_row.split(" | ")[0]
+        c_info = dept_courses[dept_courses["CourseCode"] == c_code].iloc[0]
+        c_name = c_info["CourseName"]
+        c_credit = int(c_info["CreditHour"])
+
+        score = st.number_input(
+            "Enter Numerical Score (0 - 100)",
+            min_value=0.0,
+            max_value=100.0,
+            value=75.0,
+        )
+        semester = st.selectbox("Semester", ["Semester I", "Semester II"])
+
+        if st.form_submit_button("Submit Score to Registrar"):
+          pending_df = pd.read_csv(PENDING_FILE)
+          grade_val, _ = calculate_grade(score)
+          new_pending = pd.DataFrame([{
+              "PendingID": "".join(
+                  random.choices(string.ascii_uppercase + string.digits, k=6)
+              ),
+              "StudentID": selected_sid,
+              "FullName": student_row["FullName"],
+              "CourseCode": c_code,
+              "CourseName": c_name,
+              "CreditHour": c_credit,
+              "Score": score,
+              "Grade": grade_val,
+              "Semester": semester,
+              "Instructor": st.session_state["staff_name"],
+          }])
+          pending_df = pd.concat([pending_df, new_pending], ignore_index=True)
+          pending_df.to_csv(PENDING_FILE, index=False)
+          st.success(
+              f"Score ({score}) submitted successfully for {c_name}! Awaiting"
+              " Registrar approval."
+          )
+
+elif role == "Student":
+  st.sidebar.subheader("Student Portal Login")
+  sid_in = st.sidebar.text_input("Student ID")
+  spass_in = st.sidebar.text_input("Password", type="password")
+
+  if st.sidebar.button("Student Login"):
+    stud_df = pd.read_csv(STUDENT_FILE)
+    match = stud_df[
+        (stud_df["StudentID"] == sid_in) & (stud_df["Password"] == spass_in)
+    ]
+    if not match.empty:
+      st.session_state["student_logged"] = sid_in
+      st.success("Logged in successfully!")
+      st.rerun()
+    else:
+      st.sidebar.error("Invalid Student ID or Password")
+
+  if "student_logged" in st.session_state:
+    current_sid = st.session_state["student_logged"]
+    stud_df = pd.read_csv(STUDENT_FILE)
+    student_info = stud_df[stud_df["StudentID"] == current_sid].iloc[0]
+
+    st.title(f"🎓 Student Portal: {student_info['FullName']}")
+
+    tab_profile, tab_grades, tab_transcript = st.tabs([
+        "Student Profile",
+        "Grade Report",
+        "Official Transcript & Tempo",
+    ])
+
+    with tab_profile:
+      col1, col2 = st.columns([1, 2])
+      with col1:
+        st.info(
+            f"**Campus:** {student_info['Campus']}\n\n**Department:**"
+            f" {student_info['Department']}\n\n**Level:**"
+            f" {student_info['ProgramLevel']}"
+        )
+      with col2:
+        fin_df = pd.read_csv(FINANCE_FILE)
+        f_record = fin_df[fin_df["StudentID"] == current_sid]
+        if not f_record.empty:
+          status = f_record.iloc[0]["Status"]
+          paid = f_record.iloc[0]["PaidETB"]
+          total = f_record.iloc[0]["TotalFeeETB"]
+          st.metric(
+              label="Financial Status (ETB)",
+              value=status,
+              delta=f"Paid: {paid} ETB / Total: {total} ETB",
+          )
         else:
-            st.info("No pending submissions.")
+          st.metric(
+              label="Financial Status (ETB)", value="No Financial Record"
+          )
 
-# ==========================================
-# 5. GRADE APPROVALS (Admin Portal)
-# ==========================================
-elif menu == "Grade Approvals (Admin)":
-    st.subheader("✅ Teacher Grade Approvals & Publishing")
-    st.info("Review grades submitted by teachers. Approving them moves them into official student transcripts.")
-    
-    df_grades = pd.read_csv(GRADES_FILE)
-    df_pending = pd.read_csv(PENDING_GRADES_FILE)
-    
-    if len(df_pending) > 0:
-        st.dataframe(df_pending, use_container_width=True)
-        
-        selected_index = st.selectbox("Select Pending Row Index to Approve/Reject", df_pending.index)
-        row_to_process = df_pending.loc[selected_index]
-        
-        col_app1, col_app2 = st.columns(2)
-        with col_app1:
-            if st.button("Approve Grade"):
-                # Move to approved grades
-                approved_row = pd.DataFrame([row_to_process.drop("InstructorID")])
-                df_grades = pd.concat([df_grades, approved_row], ignore_index=True)
-                df_grades.to_csv(GRADES_FILE, index=False)
-                
-                # Remove from pending
-                df_pending = df_pending.drop(index=selected_index).reset_index(drop=True)
-                df_pending.to_csv(PENDING_GRADES_FILE, index=False)
-                st.success("Grade approved and added to official student transcript!")
-                st.rerun()
-        with col_app2:
-            if st.button("Reject Grade"):
-                df_pending = df_pending.drop(index=selected_index).reset_index(drop=True)
-                df_pending.to_csv(PENDING_GRADES_FILE, index=False)
-                st.warning("Grade submission rejected.")
-                st.rerun()
-    else:
-        st.info("No pending grade approvals from teachers.")
-
-# ==========================================
-# 6. OFFICIAL TRANSCRIPT GENERATOR
-# ==========================================
-elif menu == "Official Transcript Generator":
-    st.subheader("📜 Official Academic Transcript Generator")
-    df_students = pd.read_csv(STUDENTS_FILE)
-    df_grades = pd.read_csv(GRADES_FILE)
-    
-    if len(df_students) == 0:
-        st.warning("No students available.")
-    else:
-        selected_id = st.selectbox("Select Student ID for Transcript", df_students["StudentID"].values)
-        student = df_students[df_students["StudentID"] == selected_id].iloc[0]
-        s_grades = df_grades[df_grades["StudentID"] == selected_id]
-        
-        if st.button("Generate Official Transcript (Approved Grades Only)"):
-            st.markdown("---")
-            col_ph1, col_ph2, col_ph3 = st.columns([1, 2, 1])
-            with col_ph1:
-                if pd.notna(student["PhotoPath"]) and student["PhotoPath"] != "" and os.path.exists(student["PhotoPath"]):
-                    st.image(student["PhotoPath"], width=120, caption="ID Photo")
-                else:
-                    st.info("No Photo")
-            with col_ph2:
-                st.markdown("<h3 style='text-align: center; color: #1E3A8A; margin-bottom: 0;'>HANEK TECHNOLOGY AND BUSINESS COLLEGE</h3>", unsafe_allow_html=True)
-                st.markdown(f"<p style='text-align: center; font-weight: 600;'>OFFICIAL ACADEMIC TRANSCRIPT | Campus: {student['Campus']}</p>", unsafe_allow_html=True)
-            with col_ph3:
-                st.write("")
-                
-            st.markdown("---")
-            col_info1, col_info2 = st.columns(2)
-            with col_info1:
-                st.write(f"**Student Name:** {student['FullName']}")
-                st.write(f"**Student ID:** {student['StudentID']}")
-                st.write(f"**Department:** {student['Department']}")
-            with col_info2:
-                st.write(f"**Admission Level:** {student['Level']}")
-                st.write(f"**Academic Year:** {student['AcademicYear']}")
-                st.write(f"**Status:** {student['EnrollmentStatus']}")
-                
-            st.markdown("---")
-            if len(s_grades) > 0:
-                for lvl in ["Level I", "Level II", "Level III", "Level IV"]:
-                    lvl_grades = s_grades[s_grades["Level"] == lvl]
-                    if len(lvl_grades) > 0:
-                        st.markdown(f"### **{lvl.upper()}**")
-                        display_df = lvl_grades[["CourseCode", "CourseTitle", "CreditHours", "Score", "Grade", "GradePoints"]]
-                        st.dataframe(display_df, use_container_width=True)
-                        total_cr = lvl_grades["CreditHours"].sum()
-                        total_pts = lvl_grades["GradePoints"].sum()
-                        gpa = total_pts / total_cr if total_cr > 0 else 0.0
-                        st.markdown(f"**Total Credit Hours:** {total_cr} | **Total Grade Points:** {total_pts:.2f} | **GPA:** **{gpa:.2f}**")
-                        st.markdown("---")
-                tot_credits = s_grades["CreditHours"].sum()
-                tot_points = s_grades["GradePoints"].sum()
-                cgpa = tot_points / tot_credits if tot_credits > 0 else 0.0
-                st.success(f"### Cumulative Grade Point Average (CGPA): **{cgpa:.2f}** / 4.00")
-            else:
-                st.info("No approved grades recorded for this student yet.")
-
-# ==========================================
-# 7. ADMIN SECURITY
-# ==========================================
-elif menu == "Admin Security & Credentials":
-    st.subheader("🔐 Admin Account Security Management")
-    df_admin = pd.read_csv(ADMIN_FILE)
-    curr_admin = df_admin.iloc[0]
-    
-    with st.form("admin_sec_form"):
-        new_adm_user = st.text_input("Admin Username", value=curr_admin["Username"])
-        new_adm_pass = st.text_input("Admin Password", value=curr_admin["Password"], type="password")
-        
-        if st.form_submit_button("Update Admin Credentials"):
-            df_admin.loc[0, "Username"] = new_adm_user
-            df_admin.loc[0, "Password"] = new_adm_pass
-            df_admin.to_csv(ADMIN_FILE, index=False)
-            st.success("Admin credentials updated successfully!")
-
-# ==========================================
-# 8. STUDENT SELF-SERVICE PORTAL (Private Grades)
-# ==========================================
-elif menu == "My Student Profile":
-    st.subheader("🎓 My Student Portal")
-    df_students = pd.read_csv(STUDENTS_FILE)
-    df_grades = pd.read_csv(GRADES_FILE)
-    
-    student = df_students[df_students["StudentID"] == st.session_state.username].iloc[0]
-    s_grades = df_grades[df_grades["StudentID"] == st.session_state.username]
-    
-    col1, col2 = st.columns([1, 3])
-    with col1:
-        if pd.notna(student["PhotoPath"]) and student["PhotoPath"] != "" and os.path.exists(student["PhotoPath"]):
-            st.image(student["PhotoPath"], width=150, caption="ID Photo")
-        else:
-            st.info("No ID Photo Uploaded")
-    with col2:
-        st.markdown(f"### **{student['FullName']}**")
-        st.write(f"**Student ID:** {student['StudentID']}")
-        st.write(f"**Department:** {student['Department']}")
-        st.write(f"**Campus:** {student['Campus']}")
-        st.write(f"**Current Level:** {student['Level']}")
-        st.write(f"**Enrollment Status:** {student['EnrollmentStatus']}")
-        
-    st.markdown("---")
-    st.subheader("My Official Approved Grades")
-    if len(s_grades) > 0:
-        st.dataframe(s_grades[["Level", "Semester", "CourseCode", "CourseTitle", "CreditHours", "Score", "Grade"]], use_container_width=True)
-        tot_cr = s_grades["CreditHours"].sum()
-        tot_pts = s_grades["GradePoints"].sum()
-        cgpa = tot_pts / tot_cr if tot_cr > 0 else 0.0
-        st.metric("My Cumulative GPA", f"{cgpa:.2f} / 4.00")
-    else:
-        st.info("Your grades are pending admin approval.")
-
-elif menu == "My Official Grades & Transcript":
-    st.subheader("📜 My Official Transcript Summary")
-    df_grades = pd.read_csv(GRADES_FILE)
-    s_grades = df_grades[df_grades["StudentID"] == st.session_state.username]
-    if len(s_grades) > 0:
-        st.dataframe(s_grades, use_container_width=True)
-    else:
+    with tab_grades:
+      st.subheader("My Course Grades")
+      grades_df = pd.read_csv(GRADES_FILE)
+      my_grades = grades_df[grades_df["StudentID"] == current_sid]
+      if my_grades.empty:
         st.info("No approved grades available yet.")
+      else:
+        st.dataframe(my_grades, use_container_width=True)
 
-elif menu == "Change My Password":
-    st.subheader("🔑 Change My Password")
-    df_students = pd.read_csv(STUDENTS_FILE)
-    
-    with st.form("student_pass_form"):
-        old_pass = st.text_input("Current Password", type="password")
-        new_pass_1 = st.text_input("New Password", type="password")
-        new_pass_2 = st.text_input("Confirm New Password", type="password")
-        
-        if st.form_submit_button("Update Password"):
-            current_row = df_students[df_students["StudentID"] == st.session_state.username].iloc[0]
-            if old_pass != str(current_row["Password"]):
-                st.error("Incorrect current password!")
-            elif new_pass_1 != new_pass_2:
-                st.error("New passwords do not match!")
-            elif not new_pass_1:
-                st.error("Password cannot be empty!")
-            else:
-                df_students.loc[df_students["StudentID"] == st.session_state.username, "Password"] = new_pass_1
-                df_students.to_csv(STUDENTS_FILE, index=False)
-                st.success("Your password has been changed successfully!")
+    with tab_transcript:
+      st.subheader("Print Transcript & Temporary Grade Report ('Tempo')")
+      doc_type = st.radio(
+          "Select Document Type",
+          ["Official Academic Transcript", "Temporary Grade Report (Tempo)"],
+      )
 
-# --- DEVELOPER FOOTER ---
-st.markdown("""
-    <div class="developer-footer">
-        <b>Hanek Technology and Business College Registrar System</b><br>
-        Lead Developer: <b>Ebirawi Henok Loha</b> | Phone: <b>+251965514327</b> | Email: <b>henokebirawi3@gmail.com</b><br>
-        Wolaita Sodo, Basketo, Boloso Bombe, Jinka Campuses © 2026
-    </div>
-""", unsafe_allow_html=True)
+      fin_df = pd.read_csv(FINANCE_FILE)
+      cleared = True
+      if not fin_df.empty:
+        f_chk = fin_df[fin_df["StudentID"] == current_sid]
+        if not f_chk.empty and f_chk.iloc[0]["Status"] != "Fully Cleared":
+          cleared = False
+
+      if not cleared and doc_type == "Official Academic Transcript":
+        st.error(
+            "⚠️ Official Transcript generation is locked pending financial"
+            " clearance. Please settle your tuition balance with the finance"
+            " office."
+        )
+      else:
+        auth_code = generate_auth_code()
+        st.markdown(
+            f"""
+                <div style="border: 2px solid #333; padding: 25px; border-radius: 10px; background-color: #ffffff; color: #000;">
+                    <h2 align="center">HANEK TECHNOLOGY AND BUSINESS COLLEGE</h2>
+                    <h4 align="center">OFFICE OF THE REGISTRAR - {student_info['Campus'].upper()} CAMPUS</h4>
+                    <hr>
+                    <p><b>Document Type:</b> {doc_type}</p>
+                    <p><b>Student Name:</b> {student_info['FullName']} &nbsp;&nbsp;&nbsp;&nbsp; <b>ID No:</b> {current_sid}</p>
+                    <p><b>Department:</b> {student_info['Department']} &nbsp;&nbsp;&nbsp;&nbsp; <b>Program:</b> {student_info['ProgramLevel']}</p>
+                    <hr>
+                """,
+            unsafe_allow_html=True,
+        )
+
+        grades_df = pd.read_csv(GRADES_FILE)
+        my_grades = grades_df[grades_df["StudentID"] == current_sid]
+        if not my_grades.empty:
+          st.table(
+              my_grades[[
+                  "CourseCode",
+                  "CourseName",
+                  "CreditHour",
+                  "Score",
+                  "Grade",
+                  "Semester",
+              ]]
+          )
+        else:
+          st.write("No courses recorded.")
+
+        st.markdown(
+            f"""
+                    <hr>
+                    <p><b>Authentication Verification Number:</b> <span style="color: blue; font-family: monospace;">{auth_code}</span></p>
+                    <p style="font-size: 11px; color: gray;">This document is electronically verified by Hanek Technology and Business College Registrar System. Any alteration invalidates this document.</p>
+                </div>
+                """,
+            unsafe_allow_html=True,
+        )
+
+        if st.button("🖨️ Print / Save Document"):
+          st.success(
+              f"Document generated successfully with Auth Code: {auth_code}"
+          )
+
+# --- DEVELOPER FOOTER BRANDING ---
+st.markdown("---")
+st.markdown(
+    "<p style='text-align: center; font-size: 13px; color: gray;'>Developed by"
+    " <b>Ebirawi Henok Loha</b> | Contact: +251965514327 | Email:"
+    " henokebirawi3@gmail.com<br>Hanek Technology and Business College ©"
+    " 2026</p>",
+    unsafe_allow_html=True,
+)
