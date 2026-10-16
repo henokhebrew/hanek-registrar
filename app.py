@@ -6,12 +6,12 @@ import streamlit as st
 
 # --- PAGE CONFIGURATION ---
 st.set_page_config(
-    page_title="Hanek Technology and Business College - Portal",
+    page_title="Hanek Technology and Business College - Registrar SIS",
     page_icon="🎓",
     layout="wide",
 )
 
-# --- CSV FILE PATHS ---
+# --- CSV FILE PATHS & DIRECTORIES ---
 STUDENT_FILE = "students.csv"
 GRADES_FILE = "grades.csv"
 PENDING_FILE = "pending_grades.csv"
@@ -169,6 +169,11 @@ st.sidebar.markdown(
 
 if os.path.exists(LOGO_FILE):
   st.sidebar.image(LOGO_FILE, use_column_width=True)
+else:
+  st.sidebar.info(
+      "💡 Tip: You can upload your college logo in the Admin Control Panel"
+      " under 'System Settings & Logo'."
+  )
 
 st.sidebar.markdown("---")
 role = st.sidebar.selectbox(
@@ -181,44 +186,42 @@ if role == "Home Dashboard":
   col1, col2 = st.columns([3, 1])
   with col1:
     st.title("HANEK TECHNOLOGY AND BUSINESS COLLEGE")
-    st.subheader(
-        "Multi-Campus Registrar & Student Information Management System"
-    )
+    st.subheader("Office of the Registrar & Student Information System")
     st.write(
-        "Welcome to the official online portal serving Wolaita Sodo, Basketo"
-        " Laska, Boloso Bombe, and Jinka campuses. Manage student admissions,"
-        " staff credentials, grade approvals, ETB financial clearance, and"
-        " secure transcript generation."
+        "Welcome to the official institutional portal serving Wolaita Sodo,"
+        " Basketo Laska, Boloso Bombe, and Jinka campuses. Manage student"
+        " admissions, faculty records, grade approvals, financial clearance in"
+        " Ethiopian Birr (ETB), and secure academic document printing."
     )
   with col2:
     if os.path.exists(LOGO_FILE):
       st.image(LOGO_FILE, width=150)
 
   st.markdown("---")
-  st.markdown("### 🏛️ Quick Portal Services")
+  st.markdown("### 🏛️ Core Registrar Services")
 
   c1, c2, c3 = st.columns(3)
   with c1:
     st.info(
-        "**📚 TVET Programs**\n\nCooperative Accounting, Management, Marketing,"
-        " HNS, Natural Resource Management, & Crop Production (Levels I–IV)."
+        "**📋 Student Admissions & Records**\n\nFull CRUD management for TVET"
+        " Programs (Levels I–IV) across all multi-campus branches."
     )
   with c2:
     st.info(
-        "**🔒 Secure Registrar**\n\nInstructor grade submissions with manual"
-        " module entry, official admin verification, and ETB fee clearance"
-        " locks."
+        "**🔒 Grade Workflow & Finance**\n\nInstructor grade submissions with"
+        " registrar verification and ETB tuition clearance locks."
     )
   with c3:
     st.info(
-        "**🖨️ Official Documents**\n\nInstant generation of Tempo and Original"
-        " transcripts backed by unique authentication numbers."
+        "**🖨️ Secure Document Printing**\n\nInstant generation of Official"
+        " Transcripts, Temporary Grade Reports (Tempo), and Original Copies"
+        " with authentication codes."
     )
 
   st.markdown("---")
   st.markdown(
-      "📌 **Select your portal role from the sidebar dropdown menu** to log"
-      " into Admin, Staff, or Student accounts."
+      "📌 **Please select your portal role from the sidebar dropdown menu** to"
+      " proceed to Admin, Staff, or Student login."
   )
 
 # --- ADMIN / REGISTRAR PORTAL ---
@@ -242,17 +245,18 @@ elif role == "Admin / Registrar":
 
   if st.session_state.get("role") == "Admin":
     st.title("🛡️ Admin & Registrar Control Panel")
-    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
-        "Manage Students",
-        "Manage Staff",
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+        "Student Admission",
+        "Staff Directory",
         "Grade Approvals",
-        "Financial Status (ETB)",
-        "Security Settings",
+        "Financial Accounts (ETB)",
+        "Document Printing",
+        "System Settings & Logo",
         "System Logs",
     ])
 
     with tab1:
-      st.subheader("Student Admission & Records (CRUD)")
+      st.subheader("Student Admission & Records Management")
       students_df = pd.read_csv(STUDENT_FILE)
       st.dataframe(students_df, use_container_width=True)
 
@@ -277,7 +281,7 @@ elif role == "Admin / Registrar":
           )
           s_pass = st.text_input("Default Password", type="password")
 
-        if st.form_submit_button("Register Student"):
+        if st.form_submit_button("Admit Student"):
           if s_id and s_name:
             new_row = pd.DataFrame([{
                 "StudentID": s_id,
@@ -321,7 +325,7 @@ elif role == "Admin / Registrar":
           }])
           staff_df = pd.concat([staff_df, new_staff], ignore_index=True)
           staff_df.to_csv(STAFF_FILE, index=False)
-          st.success("Staff profile created!")
+          st.success("Staff profile created successfully!")
           st.rerun()
 
     with tab3:
@@ -354,17 +358,17 @@ elif role == "Admin / Registrar":
 
           pending_df = pending_df.drop(approve_id).reset_index(drop=True)
           pending_df.to_csv(PENDING_FILE, index=False)
-          st.success("Grade successfully approved and published!")
+          st.success("Grade successfully approved and posted to transcript!")
           st.rerun()
 
     with tab4:
-      st.subheader("Student Financial Accounts (ETB)")
+      st.subheader("Student Financial Accounts & Clearance (ETB)")
       fin_df = pd.read_csv(FINANCE_FILE)
       students_df = pd.read_csv(STUDENT_FILE)
       st.dataframe(fin_df, use_container_width=True)
 
       with st.form("finance_form"):
-        st.markdown("### Update Student Tuition / Fee Status")
+        st.markdown("### Update Student Tuition Balance (ETB)")
         f_sid = st.selectbox(
             "Select Student ID",
             students_df["StudentID"].tolist()
@@ -378,7 +382,7 @@ elif role == "Admin / Registrar":
             ["Pending Clearance", "Fully Cleared"],
         )
 
-        if st.form_submit_button("Update Finance Status"):
+        if st.form_submit_button("Update Financial Status"):
           if f_sid:
             if not fin_df.empty and f_sid in fin_df["StudentID"].values:
               fin_df.loc[fin_df["StudentID"] == f_sid, [
@@ -400,7 +404,119 @@ elif role == "Admin / Registrar":
             st.rerun()
 
     with tab5:
-      st.subheader("Admin Security Settings")
+      st.subheader(
+          "Official Academic Document Generation & Printing (Admin Office)"
+      )
+      students_df = pd.read_csv(STUDENT_FILE)
+      if students_df.empty:
+        st.info("No students available in the system.")
+      else:
+        target_s = st.selectbox(
+            "Select Student for Document Printing",
+            students_df["StudentID"]
+            + " - "
+            + students_df["FullName"]
+            + " ("
+            + students_df["Department"]
+            + ")",
+        )
+        sel_sid = target_s.split(" - ")[0]
+        s_info = students_df[students_df["StudentID"] == sel_sid].iloc[0]
+
+        doc_type = st.selectbox(
+            "Select Document Type",
+            [
+                "Official Academic Transcript",
+                "Temporary Grade Report (Tempo)",
+                "Original Document Copy",
+            ],
+        )
+
+        fin_df = pd.read_csv(FINANCE_FILE)
+        is_cleared = True
+        if not fin_df.empty:
+          chk = fin_df[fin_df["StudentID"] == sel_sid]
+          if not chk.empty and chk.iloc[0]["Status"] != "Fully Cleared":
+            is_cleared = False
+
+        if not is_cleared and doc_type in [
+            "Official Academic Transcript",
+            "Original Document Copy",
+        ]:
+          st.error(
+              "⚠️ Financial Clearance Required: This student has an unpaid"
+              " balance in ETB. Official transcripts and original copies are"
+              " locked until clearance is settled."
+          )
+        else:
+          auth_code = generate_auth_code()
+          st.markdown(
+              f"""
+                    <div style="border: 2px solid #333; padding: 30px; border-radius: 10px; background-color: #ffffff; color: #000;">
+                        <h2 align="center">HANEK TECHNOLOGY AND BUSINESS COLLEGE</h2>
+                        <h4 align="center">OFFICE OF THE REGISTRAR - {s_info['Campus'].upper()} CAMPUS</h4>
+                        <hr>
+                        <p><b>Document Type:</b> {doc_type}</p>
+                        <p><b>Student Name:</b> {s_info['FullName']} &nbsp;&nbsp;&nbsp;&nbsp; <b>ID No:</b> {sel_sid}</p>
+                        <p><b>Department:</b> {s_info['Department']} &nbsp;&nbsp;&nbsp;&nbsp; <b>Program:</b> {s_info['ProgramLevel']}</p>
+                        <hr>
+                    """,
+              unsafe_allow_html=True,
+          )
+
+          grades_df = pd.read_csv(GRADES_FILE)
+          s_grades = grades_df[grades_df["StudentID"] == sel_sid]
+          if not s_grades.empty:
+            st.table(
+                s_grades[[
+                    "CourseCode",
+                    "CourseName",
+                    "CreditHour",
+                    "Score",
+                    "Grade",
+                    "Semester",
+                ]]
+            )
+          else:
+            st.write("No approved course grades recorded yet.")
+
+          st.markdown(
+              f"""
+                        <hr>
+                        <p><b>Authentication Verification Number:</b> <span style="color: blue; font-family: monospace;">{auth_code}</span></p>
+                        <p style="font-size: 11px; color: gray;">Certified true record issued by the Registrar Office, Hanek Technology and Business College. Any alterations invalidate this document.</p>
+                    </div>
+                    """,
+              unsafe_allow_html=True,
+          )
+
+          if st.button("🖨️ Print / Generate Official Document"):
+            st.success(
+                f"Document successfully generated with Authentication Code:"
+                f" {auth_code}"
+            )
+
+    with tab6:
+      st.subheader("System Settings & College Logo Upload")
+      st.markdown(
+          "### Upload College Logo\nUpload your college badge/logo image"
+          " (`logo.png`) directly here so it appears across the sidebar and"
+          " portal headers."
+      )
+
+      uploaded_logo = st.file_uploader(
+          "Choose logo image (PNG / JPG)", type=["png", "jpg", "jpeg"]
+      )
+      if uploaded_logo is not None:
+        with open(LOGO_FILE, "wb") as f:
+          f.write(uploaded_logo.getbuffer())
+        st.success(
+            "Logo uploaded successfully! Please refresh or reload the page to"
+            " view it."
+        )
+
+      st.markdown("---")
+      st.markdown("### Update Admin Credentials")
       with st.form("change_admin"):
         new_adm_user = st.text_input("New Admin Username")
         new_adm_pass = st.text_input("New Admin Password", type="password")
@@ -410,13 +526,17 @@ elif role == "Admin / Registrar":
           ).to_csv(ADMIN_FILE, index=False)
           st.success("Admin credentials updated successfully!")
 
-    with tab6:
+    with tab7:
       st.subheader("System Logs & Database Health")
       st.write(
-          f"Registered Students: {len(pd.read_csv(STUDENT_FILE))}"
+          f"Total Registered Students: {len(pd.read_csv(STUDENT_FILE))}"
       )
-      st.write(f"Registered Staff: {len(pd.read_csv(STAFF_FILE))}")
-      st.write(f"Official Grades Posted: {len(pd.read_csv(GRADES_FILE))}")
+      st.write(f"Total Registered Staff: {len(pd.read_csv(STAFF_FILE))}")
+      st.write(
+          f"Pending Grade Approvals:"
+          f" {len(pd.read_csv(PENDING_FILE))}"
+      )
+      st.write(f"Official Posted Grades: {len(pd.read_csv(GRADES_FILE))}")
 
 # --- STAFF / INSTRUCTOR PORTAL ---
 elif role == "Staff / Instructor":
@@ -449,8 +569,9 @@ elif role == "Staff / Instructor":
         "### Submit Module Grades (Manual Entry by Instructor)"
     )
     st.info(
-        "ℹ️ Instructors can type module/course code, title, credit hours,"
-        " and numerical score directly below."
+        "ℹ️ Instructors can input course module codes, titles, credit hours,"
+        " and numerical scores (0-100) for review and approval by the Registrar"
+        " office."
     )
 
     students_df = pd.read_csv(STUDENT_FILE)
@@ -541,7 +662,7 @@ elif role == "Student":
     tab_profile, tab_grades, tab_transcript = st.tabs([
         "Student Profile",
         "Grade Report",
-        "Official Transcript & Tempo",
+        "Official Documents & Printing",
     ])
 
     with tab_profile:
@@ -581,14 +702,14 @@ elif role == "Student":
     with tab_transcript:
       st.subheader(
           "Print Transcript, Temporary Grade Report ('Tempo'), & Original"
-          " Document"
+          " Copy"
       )
       doc_type = st.radio(
           "Select Document Type",
           [
               "Official Academic Transcript",
               "Temporary Grade Report (Tempo)",
-              "Original Copy",
+              "Original Document Copy",
           ],
       )
 
@@ -601,7 +722,7 @@ elif role == "Student":
 
       if not cleared and doc_type in [
           "Official Academic Transcript",
-          "Original Copy",
+          "Original Document Copy",
       ]:
         st.error(
             "⚠️ Document generation is locked pending financial clearance."
@@ -611,7 +732,7 @@ elif role == "Student":
         auth_code = generate_auth_code()
         st.markdown(
             f"""
-                <div style="border: 2px solid #333; padding: 25px; border-radius: 10px; background-color: #ffffff; color: #000;">
+                <div style="border: 2px solid #333; padding: 30px; border-radius: 10px; background-color: #ffffff; color: #000;">
                     <h2 align="center">HANEK TECHNOLOGY AND BUSINESS COLLEGE</h2>
                     <h4 align="center">OFFICE OF THE REGISTRAR - {student_info['Campus'].upper()} CAMPUS</h4>
                     <hr>
