@@ -11,7 +11,10 @@ st.set_page_config(
     layout="wide",
 )
 
-# --- CSV FILE PATHS ---
+# --- DIRECTORY & CSV FILE PATHS ---
+PHOTO_DIR = "student_photos"
+os.makedirs(PHOTO_DIR, exist_ok=True)
+
 STUDENT_FILE = "students.csv"
 GRADES_FILE = "grades.csv"
 PENDING_FILE = "pending_grades.csv"
@@ -80,8 +83,14 @@ def init_csvs():
             "Year",
             "Password",
             "Photo",
+            "PhotoStatus",
         ]
     ).to_csv(STUDENT_FILE, index=False)
+  else:
+    df = pd.read_csv(STUDENT_FILE)
+    if "PhotoStatus" not in df.columns:
+      df["PhotoStatus"] = "Not Uploaded"
+      df.to_csv(STUDENT_FILE, index=False)
 
   if not os.path.exists(GRADES_FILE):
     pd.DataFrame(
@@ -202,177 +211,179 @@ def generate_auth_code():
 
 def calculate_grade(score):
   if score >= 90:
-    return "A+", 4.0
+    return "A+", 4.0, 12.0
   elif score >= 85:
-    return "A", 4.0
+    return "A", 4.0, 12.0
   elif score >= 80:
-    return "A-", 3.75
+    return "A-", 3.75, 11.25
   elif score >= 75:
-    return "B+", 3.25
+    return "B+", 3.25, 9.75
   elif score >= 70:
-    return "B", 3.0
+    return "B", 3.0, 9.0
   elif score >= 65:
-    return "B-", 2.75
+    return "B-", 2.75, 8.25
   elif score >= 60:
-    return "C+", 2.5
+    return "C+", 2.5, 7.5
   elif score >= 50:
-    return "C", 2.0
+    return "C", 2.0, 6.0
   elif score >= 40:
-    return "D", 1.0
+    return "D", 1.0, 3.0
   else:
-    return "F", 0.0
+    return "F", 0.0, 0.0
 
 
-# --- CSS STYLING FOR UNIVERSITY PORTAL CARD MODE ---
+# --- ADVANCED UNIVERSITY UI STYLING ---
 st.markdown(
     """
     <style>
+        .main { background-color: #f1f5f9; }
+        h1, h2, h3 { color: #0f172a; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-weight: 800; }
         .univ-card {
-            background-color: #ffffff;
+            background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
             border: 1px solid #cbd5e1;
-            border-radius: 8px;
-            padding: 25px;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            border-top: 5px solid #1e3a8a;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 10px 15px -3px rgba(30, 58, 138, 0.1);
             max-width: 500px;
             margin: 0 auto;
             color: #1e293b;
         }
-        .univ-header {
-            text-align: center;
-            margin-bottom: 20px;
-        }
-        .univ-header h3 {
-            color: #0f172a;
-            margin: 10px 0 5px 0;
-            font-size: 20px;
-            font-weight: bold;
-        }
-        .univ-header p {
-            color: #64748b;
-            font-size: 13px;
-            margin: 0;
-        }
+        .univ-header { text-align: center; margin-bottom: 25px; }
+        .univ-header h3 { color: #1e3a8a; margin: 10px 0 5px 0; font-size: 22px; font-weight: 900; }
+        .univ-header p { color: #475569; font-size: 13px; font-weight: 600; margin: 0; text-transform: uppercase; }
         .portal-banner {
-            background-color: #1e3a8a;
+            background: linear-gradient(90deg, #1e3a8a 0%, #3b82f6 100%);
             color: white;
-            padding: 10px 15px;
-            border-radius: 6px;
+            padding: 12px 20px;
+            border-radius: 8px;
             text-align: center;
-            font-weight: bold;
-            margin-bottom: 15px;
-            font-size: 14px;
+            font-weight: 800;
+            margin-bottom: 20px;
+            font-size: 15px;
         }
         .notice-card {
-            background: #f8fafc;
-            border-left: 4px solid #1e3a8a;
-            padding: 12px 15px;
-            margin-bottom: 10px;
-            border-radius: 4px;
+            background: #ffffff;
+            border-left: 6px solid #1e3a8a;
+            border: 1px solid #e2e8f0;
+            padding: 18px 22px;
+            margin-bottom: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        .stButton>button {
+            background: linear-gradient(90deg, #1e3a8a 0%, #2563eb 100%);
+            color: white;
+            font-weight: bold;
+            border-radius: 8px;
+            border: none;
+            padding: 0.5rem 1rem;
+            box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.2);
         }
     </style>
 """,
     unsafe_allow_html=True,
 )
 
-# --- SIDEBAR PORTAL NAVIGATION & BRANDING ---
+# --- SIDEBAR NAVIGATION ---
 st.sidebar.markdown(
-    "<h3 style='text-align: center;'>Hanek College Portal</h3>",
+    "<h2 style='text-align: center; color: #1e3a8a; font-weight: 900;'>Hanek"
+    " College</h2>",
+    unsafe_allow_html=True,
+)
+st.sidebar.markdown(
+    "<p style='text-align: center; font-size: 11px; color: #64748b; margin-top:"
+    " -10px;'>Multi-Campus SIS & Registrar</p>",
     unsafe_allow_html=True,
 )
 
 if os.path.exists(LOGO_FILE):
   st.sidebar.image(LOGO_FILE, use_column_width=True)
 else:
-  st.sidebar.info(
-      "💡 Tip: Upload your college logo in the Admin Control Panel under"
-      " 'System Settings & Logo'."
-  )
+  st.sidebar.info("💡 Tip: Upload college logo in Admin System Settings.")
 
 st.sidebar.markdown("---")
 role = st.sidebar.selectbox(
-    "Select Portal Access",
+    "🧭 Select Portal Access",
     [
         "Home / Public Announcements",
         "Online Admission Application",
         "Admin / Registrar",
         "Staff / Instructor",
-        "Student",
+        "Student Portal",
     ],
 )
 
-# --- HOME / PUBLIC ANNOUNCEMENTS DASHBOARD ---
+# --- HOME / PUBLIC ANNOUNCEMENTS ---
 if role == "Home / Public Announcements":
   col1, col2 = st.columns([2, 1])
   with col1:
-    st.title("HANEK TECHNOLOGY AND BUSINESS COLLEGE")
+    st.title("🏛️ HANEK TECHNOLOGY AND BUSINESS COLLEGE")
     st.subheader(
         "Official Multi-Campus Registrar & Student Information System"
     )
-    st.write(
+    st.markdown(
         "Welcome to the official institutional portal serving **Wolaita Sodo,"
         " Basketo Laska, Boloso Bombe, and Jinka** campuses. Explore public"
-        " announcements, submit new online admission applications, or access"
+        " announcements, submit online admissions applications, or access"
         " secure portal logins."
     )
   with col2:
     if os.path.exists(LOGO_FILE):
-      st.image(LOGO_FILE, width=180)
+      st.image(LOGO_FILE, width=200)
 
   st.markdown("---")
   st.markdown("### 📢 Public Announcements & Institutional Notices")
 
   ann_df = pd.read_csv(ANNOUNCE_FILE)
   if ann_df.empty:
-    st.info(
-        "No public announcements currently posted. Check back soon for urgent"
-        " notices!"
-    )
+    st.info("No public announcements currently posted.")
   else:
     for _, row in ann_df.iterrows():
       st.markdown(
           f"""
                 <div class="notice-card">
-                    <h4 style="margin: 0; color: #1e3a8a;">{row['Title']}</h4>
-                    <p style="font-size: 11px; color: #64748b; margin: 2px 0 8px 0;"><b>Date:</b> {row['Date']} | <b>Category:</b> {row['Category']}</p>
-                    <p style="margin: 0; font-size: 13px; color: #334155;">{row['Content']}</p>
+                    <h4 style="margin: 0; color: #1e3a8a; font-size: 18px; font-weight: 800;">{row['Title']}</h4>
+                    <p style="font-size: 12px; color: #64748b; margin: 4px 0 10px 0;"><b>📅 Date:</b> {row['Date']} | <span style="background: #e0f2fe; color: #0369a1; padding: 2px 8px; border-radius: 4px; font-weight: bold;">{row['Category']}</span></p>
+                    <p style="margin: 0; font-size: 14px; color: #334155; line-height: 1.5;">{row['Content']}</p>
                 </div>
             """,
           unsafe_allow_html=True,
       )
 
   st.markdown("---")
-  st.markdown("### 🏛️ Quick Portal Access Gateways")
+  st.markdown("### 🌐 Quick Portal Access Gateways")
   c1, c2, c3 = st.columns(3)
   with c1:
     st.success(
-        "**📋 Online Application**\n\nProspective students can apply directly"
-        " for TVET and Degree programs."
+        "**📋 Online Application**\n\nApply directly for TVET and Degree"
+        " programs."
     )
   with c2:
     st.warning(
-        "**🛡️ Admin & Registrar**\n\nManage admissions, staff directory,"
-        " announcements, and grade approvals."
+        "**🛡️ Admin & Registrar**\n\nManage admissions, staff directory, and"
+        " grade approvals."
     )
   with c3:
     st.error(
-        "**🎓 Student & Staff Portals**\n\nSecure login for semester grades,"
-        " transcripts, and grade postings."
+        "**🎓 Student Portal**\n\nAccess semester grades, transcripts, and"
+        " profile photo uploads."
     )
 
-# --- ONLINE ADMISSION APPLICATION PORTAL ---
+# --- ONLINE ADMISSION APPLICATION ---
 elif role == "Online Admission Application":
   st.title("📋 Online Admission Application Portal")
   st.write(
       "Prospective students seeking admission to Hanek Technology and Business"
       " College across **Wolaita Sodo, Basketo Laska, Boloso Bombe, and Jinka**"
-      " campuses may submit their application below."
+      " campuses may submit their application below[span_0](start_span)[span_0](end_span)[span_1](start_span)[span_1](end_span)."
   )
 
   departments_list = get_departments()
   programs_list = get_programs()
 
   with st.form("online_application_form"):
-    st.markdown("### Applicant Information Form")
+    st.markdown("### 📝 Applicant Information Form")
     col1, col2 = st.columns(2)
     with col1:
       app_name = st.text_input("Full Legal Name")
@@ -404,19 +415,19 @@ elif role == "Online Admission Application":
         apps_df.to_csv(APPLICATIONS_FILE, index=False)
         st.success(
             f"Application submitted successfully, {app_name}! The Registrar"
-            " Office will review your details and contact you."
+            " Office will review your details."
         )
       else:
         st.error("Please provide your full name and phone number.")
 
 # --- ADMIN / REGISTRAR PORTAL ---
 elif role == "Admin / Registrar":
-  st.sidebar.subheader("Admin Authentication")
+  st.sidebar.subheader("🔐 Admin Authentication")
   adm_df = pd.read_csv(ADMIN_FILE)
   username = st.sidebar.text_input("Username")
   password = st.sidebar.text_input("Password", type="password")
 
-  if st.sidebar.button("Login"):
+  if st.sidebar.button("Login as Admin"):
     match = adm_df[
         (adm_df["Username"] == username) & (adm_df["Password"] == password)
     ]
@@ -430,8 +441,9 @@ elif role == "Admin / Registrar":
 
   if st.session_state.get("role") == "Admin":
     st.title("🛡️ Admin & Registrar Control Panel")
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10 = st.tabs([
         "Student Records",
+        "Photo Approvals",
         "Applicants & Admissions",
         "Staff Directory",
         "Announcements & Notices",
@@ -447,7 +459,7 @@ elif role == "Admin / Registrar":
 
     # TAB 1: STUDENT RECORDS (CRUD)
     with tab1:
-      st.subheader("Student Record Management (CRUD)")
+      st.subheader("🎓 Student Record Management (CRUD)")
       students_df = pd.read_csv(STUDENT_FILE)
 
       with st.expander("➕ Register New Student", expanded=False):
@@ -478,6 +490,7 @@ elif role == "Admin / Registrar":
                     "Year": "1",
                     "Password": s_pass,
                     "Photo": "",
+                    "PhotoStatus": "Not Uploaded",
                 }])
                 students_df = pd.concat(
                     [students_df, new_row], ignore_index=True
@@ -492,7 +505,6 @@ elif role == "Admin / Registrar":
         st.info("No student records found.")
       else:
         st.dataframe(students_df, use_container_width=True)
-
         sel_edit_student = st.selectbox(
             "Select Student ID to Edit or Delete",
             students_df["StudentID"].tolist(),
@@ -563,9 +575,60 @@ elif role == "Admin / Registrar":
               st.warning("Student record deleted permanently.")
               st.rerun()
 
-    # TAB 2: APPLICANTS & ADMISSIONS
+    # TAB 2: PHOTO APPROVALS
     with tab2:
-      st.subheader("Online Admission Applications Review")
+      st.subheader("🖼️ Student Profile Photo Approvals")
+      students_df = pd.read_csv(STUDENT_FILE)
+      pending_photos = students_df[
+          students_df["PhotoStatus"] == "Pending Approval"
+      ]
+
+      if pending_photos.empty:
+        st.info("No student profile photos waiting for approval.")
+      else:
+        for _, p_row in pending_photos.iterrows():
+          col_p1, col_p2 = st.columns([1, 2])
+          with col_p1:
+            p_path = p_row.get("Photo", "")
+            if p_path and os.path.exists(p_path):
+              st.image(p_path, width=150)
+            else:
+              st.warning("Photo file missing.")
+          with col_p2:
+            st.markdown(f"**Student ID:** `{p_row['StudentID']}`")
+            st.markdown(f"**Full Name:** {p_row['FullName']}")
+            st.markdown(
+                f"**Campus / Dept:** {p_row['Campus']} | {p_row['Department']}"
+            )
+
+            c_app1, c_app2 = st.columns(2)
+            if c_app1.button(
+                f"✅ Approve Photo ({p_row['StudentID']})",
+                key=f"app_{p_row['StudentID']}",
+            ):
+              students_df.loc[
+                  students_df["StudentID"] == p_row["StudentID"], "PhotoStatus"
+              ] = "Approved"
+              students_df.to_csv(STUDENT_FILE, index=False)
+              st.success(f"Photo approved for {p_row['FullName']}!")
+              st.rerun()
+
+            if c_app2.button(
+                f"❌ Reject ({p_row['StudentID']})",
+                key=f"rej_{p_row['StudentID']}",
+            ):
+              students_df.loc[
+                  students_df["StudentID"] == p_row["StudentID"],
+                  ["PhotoStatus", "Photo"],
+              ] = ["Rejected", ""]
+              students_df.to_csv(STUDENT_FILE, index=False)
+              st.warning(f"Photo rejected for {p_row['FullName']}.")
+              st.rerun()
+          st.markdown("---")
+
+    # TAB 3: APPLICANTS & ADMISSIONS
+    with tab3:
+      st.subheader("📋 Online Admission Applications Review")
       apps_df = pd.read_csv(APPLICATIONS_FILE)
       if apps_df.empty:
         st.info("No online admission applications submitted yet.")
@@ -588,6 +651,7 @@ elif role == "Admin / Registrar":
                 "Year": "1",
                 "Password": "password123",
                 "Photo": "",
+                "PhotoStatus": "Not Uploaded",
             }])
             students_df = pd.read_csv(STUDENT_FILE)
             students_df = pd.concat([students_df, new_student], ignore_index=True)
@@ -601,9 +665,9 @@ elif role == "Admin / Registrar":
             )
             st.rerun()
 
-    # TAB 3: STAFF DIRECTORY
-    with tab3:
-      st.subheader("Staff & Faculty Directory Management")
+    # TAB 4: STAFF DIRECTORY
+    with tab4:
+      st.subheader("👨‍🏫 Staff & Faculty Directory Management")
       staff_df = pd.read_csv(STAFF_FILE)
       if "InstitutionalEmail" not in staff_df.columns:
         staff_df["InstitutionalEmail"] = ""
@@ -707,9 +771,9 @@ elif role == "Admin / Registrar":
               st.warning("Staff record deleted permanently.")
               st.rerun()
 
-    # TAB 4: ANNOUNCEMENTS & NOTICES
-    with tab4:
-      st.subheader("Manage Public Announcements & Notices")
+    # TAB 5: ANNOUNCEMENTS & NOTICES
+    with tab5:
+      st.subheader("📢 Manage Public Announcements & Notices")
       ann_df = pd.read_csv(ANNOUNCE_FILE)
       st.dataframe(ann_df, use_container_width=True)
 
@@ -754,13 +818,13 @@ elif role == "Admin / Registrar":
             st.warning("Notice deleted.")
             st.rerun()
 
-    # TAB 5: DEPARTMENTS & PROGRAMS
-    with tab5:
-      st.subheader("Manage Academic Departments & Programs")
+    # TAB 6: DEPARTMENTS & PROGRAMS
+    with tab6:
+      st.subheader("📚 Manage Academic Departments & Programs")
       col_dept, col_prog = st.columns(2)
 
       with col_dept:
-        st.markdown("### 📚 Departments")
+        st.markdown("### 🏛️ Departments")
         dept_df = pd.DataFrame({"Department": departments_list})
         st.dataframe(dept_df, use_container_width=True)
 
@@ -817,9 +881,9 @@ elif role == "Admin / Registrar":
             else:
               st.error("You must retain at least one program.")
 
-    # TAB 6: GRADE APPROVALS
-    with tab6:
-      st.subheader("Pending Grade Approvals & Moderation")
+    # TAB 7: GRADE APPROVALS
+    with tab7:
+      st.subheader("✅ Pending Grade Approvals & Moderation")
       pending_df = pd.read_csv(PENDING_FILE)
       if pending_df.empty:
         st.info("No pending grades awaiting registrar approval.")
@@ -832,7 +896,7 @@ elif role == "Admin / Registrar":
         if col_app1.button("✅ Approve & Post Grade"):
           row = pending_df.loc[approve_id]
           grades_df = pd.read_csv(GRADES_FILE)
-          grade_val, gp = calculate_grade(row["Score"])
+          grade_val, gp, _ = calculate_grade(row["Score"])
           final_row = pd.DataFrame([{
               "StudentID": row["StudentID"],
               "FullName": row["FullName"],
@@ -859,9 +923,9 @@ elif role == "Admin / Registrar":
           st.warning("Pending grade submission rejected and deleted.")
           st.rerun()
 
-    # TAB 7: FINANCIAL ACCOUNTS (ETB)
-    with tab7:
-      st.subheader("Student Financial Accounts & Clearance (ETB)")
+    # TAB 8: FINANCIAL ACCOUNTS (ETB)
+    with tab8:
+      st.subheader("💰 Student Financial Accounts & Clearance (ETB)")
       fin_df = pd.read_csv(FINANCE_FILE)
       students_df = pd.read_csv(STUDENT_FILE)
       st.dataframe(fin_df, use_container_width=True)
@@ -902,17 +966,18 @@ elif role == "Admin / Registrar":
             st.success("Financial records updated successfully!")
             st.rerun()
 
-    # TAB 8: DOCUMENT PRINTING
-    with tab8:
+    # TAB 9: DOCUMENT PRINTING (EXACT ETHIOPIAN UNIVERSITY STANDARD WITH CONTACTS & LOGO)
+    with tab9:
       st.subheader(
-          "Smart Landscape Academic Document Generation (Admin Office)"
+          "🖨️ Official Ethiopian University Standard Transcript & Diploma"
+          " Generator"
       )
       students_df = pd.read_csv(STUDENT_FILE)
       if students_df.empty:
         st.info("No students available in the system.")
       else:
         target_s = st.selectbox(
-            "Select Student for Smart Document Generation",
+            "Select Student for Official Document Generation",
             students_df["StudentID"]
             + " - "
             + students_df["FullName"]
@@ -924,11 +989,11 @@ elif role == "Admin / Registrar":
         s_info = students_df[students_df["StudentID"] == sel_sid].iloc[0]
 
         doc_type = st.selectbox(
-            "Select Document Type",
+            "Select Official Document Type",
             [
                 "Official Academic Transcript (Multi-Level TVET)",
                 "Temporary Grade Report (Tempo)",
-                "Original Document Copy",
+                "Official TVET Diploma Certificate",
             ],
         )
 
@@ -941,207 +1006,285 @@ elif role == "Admin / Registrar":
 
         if not is_cleared and doc_type in [
             "Official Academic Transcript (Multi-Level TVET)",
-            "Original Document Copy",
+            "Official TVET Diploma Certificate",
         ]:
           st.error(
               "⚠️ Financial Clearance Required: This student has an unpaid"
-              " balance in ETB. Official transcripts and original copies are"
-              " locked until clearance is settled."
+              " balance in ETB. Official transcripts and diplomas are locked"
+              " until financial clearance is fully settled."
           )
         else:
           auth_code = generate_auth_code()
-          st.markdown(
-              f"""
-                    <style>
-                        @media print {{
-                            @page {{ size: landscape; margin: 10mm; }}
-                            body {{ -webkit-print-color-adjust: exact; }}
-                        }}
-                        .transcript-box {{
-                            border: 2px solid #111;
-                            padding: 20px;
-                            border-radius: 6px;
-                            background-color: #ffffff;
-                            color: #000;
-                            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-                            font-size: 11px;
-                            width: 100%;
-                        }}
-                        .t-header {{
-                            text-align: center;
-                            border-bottom: 2px solid #111;
-                            padding-bottom: 8px;
-                            margin-bottom: 10px;
-                        }}
-                        .t-header h2 {{ margin: 0; font-size: 16px; font-weight: bold; letter-spacing: 0.5px; }}
-                        .t-header h4 {{ margin: 3px 0; font-size: 12px; color: #333; }}
-                        .t-info-table {{
-                            width: 100%;
-                            margin-bottom: 10px;
-                            font-size: 11px;
-                        }}
-                        .t-info-table td {{ padding: 2px 4px; }}
-                        .level-grid {{
-                            display: flex;
-                            flex-wrap: wrap;
-                            gap: 15px;
-                            justify-content: space-between;
-                        }}
-                        .level-card {{
-                            width: 48%;
-                            border: 1px solid #666;
-                            padding: 8px;
-                            margin-bottom: 10px;
-                            border-radius: 4px;
-                            background: #fafafa;
-                        }}
-                        .level-title {{
-                            font-weight: bold;
-                            background: #e2e8f0;
-                            padding: 3px 6px;
-                            margin-bottom: 5px;
-                            font-size: 11px;
-                            text-align: center;
-                            border-bottom: 1px solid #ccc;
-                        }}
-                        .mini-table {{
-                            width: 100%;
-                            border-collapse: collapse;
-                            font-size: 10px;
-                        }}
-                        .mini-table th, .mini-table td {{
-                            border: 1px solid #bbb;
-                            padding: 3px 5px;
-                            text-align: left;
-                        }}
-                        .mini-table th {{ background: #f1f5f9; }}
-                        .t-footer {{
-                            margin-top: 15px;
-                            border-top: 1px solid #111;
-                            padding-top: 10px;
-                            display: flex;
-                            justify-content: space-between;
-                            align-items: flex-end;
-                            font-size: 11px;
-                        }}
-                    </style>
-
-                    <div class="transcript-box">
-                        <div class="t-header">
-                            <h2>HANEK TECHNOLOGY AND BUSINESS COLLEGE</h2>
-                            <h4>OFFICE OF THE REGISTRAR - {s_info['Campus'].upper()} CAMPUS</h4>
-                            <div style="font-size: 12px; font-weight: bold; margin-top: 2px; text-transform: uppercase;">{doc_type}</div>
-                        </div>
-
-                        <table class="t-info-table">
-                            <tr>
-                                <td><b>Student Name:</b> {s_info['FullName']}</td>
-                                <td><b>Student ID:</b> {sel_sid}</td>
-                                <td><b>Admission Year:</b> 2026</td>
-                            </tr>
-                            <tr>
-                                <td><b>Department:</b> {s_info['Department']}</td>
-                                <td><b>Program Level:</b> {s_info['ProgramLevel']} ({s_info.get('Modality', 'Regular')})</td>
-                                <td><b>Medium of Instruction:</b> English</td>
-                            </tr>
-                        </table>
-
-                        <div class="level-grid">
-                """,
-              unsafe_allow_html=True,
-          )
-
           grades_df = pd.read_csv(GRADES_FILE)
           s_grades = grades_df[grades_df["StudentID"] == sel_sid]
 
-          levels = [
-              "TVET Level I",
-              "TVET Level II",
-              "TVET Level III",
-              "TVET Level IV",
-          ]
-          for lvl in levels:
-            lvl_grades = s_grades[s_grades["Level"] == lvl]
+          # Helper to format student photo if available
+          p_b64_tag = ""
+          s_photo = s_info.get("Photo", "")
+          if s_photo and os.path.exists(s_photo):
+            import base64
+
+            with open(s_photo, "rb") as image_file:
+              encoded_string = base64.b64encode(image_file.read()).decode()
+            p_b64_tag = f'<img src="data:image/png;base64,{encoded_string}" style="width:75px; height:90px; border:1px solid #111; object-fit: cover; float: right; margin-left: 10px;" />'
+
+          if doc_type == "Official TVET Diploma Certificate":
+            # OFFICIAL DIPLOMA CERTIFICATE LAYOUT
             st.markdown(
                 f"""
-                        <div class="level-card">
-                            <div class="level-title">{lvl} Modules & Assessment</div>
-                            <table class="mini-table">
-                                <thead>
-                                    <tr>
-                                        <th>Code</th>
-                                        <th>Module Title</th>
-                                        <th>Cr.Hr</th>
-                                        <th>Score</th>
-                                        <th>Grade</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
+                        <style>
+                            @media print {{
+                                @page {{ size: landscape; margin: 10mm; }}
+                                body {{ -webkit-print-color-adjust: exact; }}
+                            }}
+                            .diploma-box {{
+                                border: 6px double #1e3a8a;
+                                padding: 35px;
+                                background: #fffdfa;
+                                color: #111;
+                                font-family: 'Times New Roman', Times, serif;
+                                text-align: center;
+                                width: 100%;
+                            }}
+                        </style>
+                        <div class="diploma-box">
+                            <h2 style="color: #1e3a8a; margin: 0; font-size: 26px; font-weight: bold;">HANEK TECHNOLOGY AND BUSINESS COLLEGE</h2>
+                            <p style="margin: 3px 0; font-size: 14px; font-weight: bold; color: #555;">{s_info['Campus'].upper()} CAMPUS | OFFICE OF THE REGISTRAR</p>
+                            <p style="margin: 2px 0; font-size: 11px; color: #444;">Tel: +251-46-180-3164 / +251916747538 | P.O.Box: 23, Wolaita Sodo, Ethiopia</p>
+                            <p style="margin: 2px 0; font-size: 11px; color: #1e3a8a; font-weight: bold;">Website: http://www.hanekcollege.edu.et</p>
+                            <hr style="border: 1px solid #1e3a8a; width: 60%; margin: 15px auto;">
+                            
+                            <h3 style="margin: 10px 0; font-size: 20px; text-transform: uppercase; letter-spacing: 1px;">TVET LEVEL IV DIPLOMA</h3>
+                            <p style="font-size: 13px; font-style: italic; margin: 5px 0;">This is to certify that</p>
+                            <h1 style="font-size: 28px; color: #0f172a; margin: 5px 0; text-transform: uppercase;">{s_info['FullName']}</h1>
+                            <p style="font-size: 13px; line-height: 1.6; max-width: 800px; margin: 10px auto;">
+                                having successfully completed the prescribed training program and fulfilled all requirements under the Department of <b>{s_info['Department']}</b>, and having successfully passed institutional and national assessments, is hereby awarded the <b>LEVEL IV DIPLOMA</b> in <b>{s_info['Department']}</b>.
+                            </p>
+                            
+                            <table style="width: 80%; margin: 20px auto; font-size: 12px; text-align: center;">
+                                <tr>
+                                    <td><b>Student ID (UID):</b> {sel_sid}</td>
+                                    <td><b>Admission Year:</b> 2026</td>
+                                    <td><b>Medium of Instruction:</b> English</td>
+                                </tr>
+                            </table>
+
+                            <div style="display: flex; justify-content: space-between; margin-top: 40px; padding: 0 50px; font-size: 12px;">
+                                <div style="text-align: left;">
+                                    <p style="margin: 2px 0;"><b>Authentication Code:</b> <span style="color: blue; font-family: monospace;">{auth_code}</span></p>
+                                    <p style="margin: 2px 0; font-size: 10px; color: #666;">Official verifiable credential issued by Hanek Technology and Business College.</p>
+                                </div>
+                                <div style="text-align: right;">
+                                    <p style="margin: 0 0 25px 0;">___________________________</p>
+                                    <p style="margin: 0; font-weight: bold;">College Dean & Registrar Seal</p>
+                                </div>
+                            </div>
+                        </div>
+                    """,
+                unsafe_allow_html=True,
+            )
+          else:
+            # OFFICIAL LANDSCAPE MULTI-LEVEL TRANSCRIPT / TEMPO (ETHIOPIAN UNIVERSITY STANDARD)
+            st.markdown(
+                f"""
+                        <style>
+                            @media print {{
+                                @page {{ size: landscape; margin: 8mm; }}
+                                body {{ -webkit-print-color-adjust: exact; }}
+                            }}
+                            .transcript-box {{
+                                border: 2px solid #111;
+                                padding: 15px;
+                                border-radius: 4px;
+                                background-color: #ffffff;
+                                color: #000;
+                                font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+                                font-size: 10.5px;
+                                width: 100%;
+                            }}
+                            .t-header {{
+                                text-align: center;
+                                border-bottom: 2px solid #111;
+                                padding-bottom: 6px;
+                                margin-bottom: 8px;
+                            }}
+                            .t-header h2 {{ margin: 0; font-size: 15px; font-weight: bold; letter-spacing: 0.5px; }}
+                            .t-header h4 {{ margin: 2px 0; font-size: 11px; color: #333; }}
+                            .t-contacts {{
+                                font-size: 9.5px;
+                                color: #444;
+                                margin-top: 2px;
+                            }}
+                            .t-info-table {{
+                                width: 100%;
+                                margin-bottom: 8px;
+                                font-size: 10.5px;
+                            }}
+                            .t-info-table td {{ padding: 2px 4px; vertical-align: top; }}
+                            .level-grid {{
+                                display: flex;
+                                flex-wrap: wrap;
+                                gap: 10px;
+                                justify-content: space-between;
+                            }}
+                            .level-card {{
+                                width: 48.5%;
+                                border: 1px solid #666;
+                                padding: 6px;
+                                margin-bottom: 6px;
+                                border-radius: 3px;
+                                background: #fafafa;
+                            }}
+                            .level-title {{
+                                font-weight: bold;
+                                background: #e2e8f0;
+                                padding: 2px 4px;
+                                margin-bottom: 4px;
+                                font-size: 10.5px;
+                                text-align: center;
+                                border-bottom: 1px solid #ccc;
+                            }}
+                            .mini-table {{
+                                width: 100%;
+                                border-collapse: collapse;
+                                font-size: 9.5px;
+                            }}
+                            .mini-table th, .mini-table td {{
+                                border: 1px solid #bbb;
+                                padding: 2.5px 4px;
+                                text-align: left;
+                            }}
+                            .mini-table th {{ background: #f1f5f9; }}
+                            .t-footer {{
+                                margin-top: 10px;
+                                border-top: 1px solid #111;
+                                padding-top: 6px;
+                                display: flex;
+                                justify-content: space-between;
+                                align-items: flex-end;
+                                font-size: 10px;
+                            }}
+                        </style>
+
+                        <div class="transcript-box">
+                            <div class="t-header">
+                                {p_b64_tag}
+                                <h2>HANEK TECHNOLOGY AND BUSINESS COLLEGE</h2>
+                                <h4>OFFICE OF THE REGISTRAR — {s_info['Campus'].upper()} CAMPUS</h4>
+                                <div class="t-contacts">
+                                    Tel: +251-46-180-3164 / +251916747538 | P.O.Box: 23, Wolaita Sodo, Ethiopia<br>
+                                    <b>Website:</b> http://www.hanekcollege.edu.et | <b>Email:</b> registrar@hanekcollege.edu.et
+                                </div>
+                                <div style="font-size: 11px; font-weight: bold; margin-top: 3px; text-transform: uppercase; color: #1e3a8a;">{doc_type}</div>
+                            </div>
+
+                            <table class="t-info-table">
+                                <tr>
+                                    <td><b>Student Name:</b> {s_info['FullName']}</td>
+                                    <td><b>Student ID (UID):</b> {sel_sid}</td>
+                                    <td><b>Admission Year:</b> 2026</td>
+                                </tr>
+                                <tr>
+                                    <td><b>Department:</b> {s_info['Department']}</td>
+                                    <td><b>Program Level:</b> {s_info['ProgramLevel']} ({s_info.get('Modality', 'Regular')})</td>
+                                    <td><b>Medium of Instruction:</b> English</td>
+                                </tr>
+                            </table>
+
+                            <div class="level-grid">
                     """,
                 unsafe_allow_html=True,
             )
 
-            if not lvl_grades.empty:
-              for _, row in lvl_grades.iterrows():
-                st.markdown(
-                    f"""
-                            <tr>
-                                <td>{row['CourseCode']}</td>
-                                <td>{row['CourseName']}</td>
-                                <td>{row['CreditHour']}</td>
-                                <td>{row['Score']}</td>
-                                <td>{row['Grade']}</td>
-                            </tr>
+            levels = [
+                "TVET Level I",
+                "TVET Level II",
+                "TVET Level III",
+                "TVET Level IV",
+            ]
+            for lvl in levels:
+              lvl_grades = s_grades[s_grades["Level"] == lvl]
+              st.markdown(
+                  f"""
+                            <div class="level-card">
+                                <div class="level-title">{lvl} Modules & Assessment</div>
+                                <table class="mini-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Code</th>
+                                            <th>Module Title</th>
+                                            <th>Cr.Hr</th>
+                                            <th>Score</th>
+                                            <th>Grade</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
                         """,
+                  unsafe_allow_html=True,
+              )
+
+              if not lvl_grades.empty:
+                for _, row in lvl_grades.iterrows():
+                  st.markdown(
+                      f"""
+                                <tr>
+                                    <td>{row['CourseCode']}</td>
+                                    <td>{row['CourseName']}</td>
+                                    <td>{row['CreditHour']}</td>
+                                    <td>{row['Score']}</td>
+                                    <td>{row['Grade']}</td>
+                                </tr>
+                            """,
+                      unsafe_allow_html=True,
+                  )
+              else:
+                st.markdown(
+                    """
+                                <tr>
+                                    <td colspan="5" style="text-align: center; color: #777;">No modules recorded for this level.</td>
+                                </tr>
+                            """,
                     unsafe_allow_html=True,
                 )
-            else:
+
               st.markdown(
                   """
-                            <tr>
-                                <td colspan="5" style="text-align: center; color: #777;">No modules recorded for this level.</td>
-                            </tr>
+                                    </tbody>
+                                </table>
+                            </div>
                         """,
                   unsafe_allow_html=True,
               )
 
             st.markdown(
-                """
-                                </tbody>
-                            </table>
+                f"""
+                            </div>
+
+                            <div class="t-footer">
+                                <div>
+                                    <p style="margin: 2px 0;"><b>Authentication Code:</b> <span style="color: blue; font-family: monospace;">{auth_code}</span></p>
+                                    <p style="margin: 2px 0; font-size: 9.5px; color: #555;">Official Academic Record issued by Hanek Technology and Business College. Valid only with Registrar seal and signature.</p>
+                                </div>
+                                <div style="text-align: right;">
+                                    <p style="margin: 12px 0 2px 0;">___________________________</p>
+                                    <p style="margin: 0; font-weight: bold;">Registrar Office Seal & Signature</p>
+                                </div>
+                            </div>
                         </div>
                     """,
                 unsafe_allow_html=True,
             )
 
-          st.markdown(
-              f"""
-                        </div>
-
-                        <div class="t-footer">
-                            <div>
-                                <p style="margin: 2px 0;"><b>Authentication Code:</b> <span style="color: blue; font-family: monospace;">{auth_code}</span></p>
-                                <p style="margin: 2px 0; font-size: 10px; color: #555;">Certified true record issued by the Registrar Office, Hanek Technology and Business College. Any alterations invalidate this document.</p>
-                            </div>
-                            <div style="text-align: right;">
-                                <p style="margin: 15px 0 2px 0;">___________________________</p>
-                                <p style="margin: 0; font-weight: bold;">Registrar Office Seal & Signature</p>
-                            </div>
-                        </div>
-                    </div>
-                """,
-              unsafe_allow_html=True,
-          )
-
           st.info(
-              "💡 **Smart Print Tip:** Press `Ctrl + P` (or use browser share"
-              " menu on mobile) and select **Landscape** orientation to print"
-              " this multi-level compact layout perfectly on a single sheet!"
+              "💡 **Standard Print Tip:** Press `Ctrl + P` (or use browser share"
+              " menu on mobile) and select **Landscape** orientation. The"
+              " layout is optimized to fit all 4 TVET levels and official"
+              " institutional contact details cleanly on a single page."
           )
 
-    # TAB 9: SYSTEM SETTINGS & LOGS
-    with tab9:
-      st.subheader("System Settings & Database Health")
+    # TAB 10: SYSTEM SETTINGS & LOGS
+    with tab10:
+      st.subheader("⚙️ System Settings & Database Health")
       st.write(
           f"Total Registered Students: {len(pd.read_csv(STUDENT_FILE))}"
       )
@@ -1182,7 +1325,7 @@ elif role == "Staff / Instructor":
                 <h3>Hanek Technology & Business College</h3>
                 <p>Staff & Faculty Portal Authentication</p>
             </div>
-            <div class="portal-banner">FACULTY & INSTRUCTOR LOGIN</div>
+            <div class="portal-banner">👨‍🏫 FACULTY & INSTRUCTOR LOGIN</div>
     """,
       unsafe_allow_html=True,
   )
@@ -1263,7 +1406,7 @@ elif role == "Staff / Instructor":
         if st.form_submit_button("Submit Grade to Registrar"):
           if c_code and c_name:
             pending_df = pd.read_csv(PENDING_FILE)
-            grade_val, gp = calculate_grade(score)
+            grade_val, gp, _ = calculate_grade(score)
             new_pending = pd.DataFrame([{
                 "PendingID": "".join(
                     random.choices(string.ascii_uppercase + string.digits, k=6)
@@ -1289,7 +1432,7 @@ elif role == "Staff / Instructor":
             st.error("Please provide both module code and title.")
 
 # --- STUDENT PORTAL ---
-elif role == "Student":
+elif role == "Student Portal":
   st.markdown("<br>", unsafe_allow_html=True)
   st.markdown(
       """
@@ -1307,7 +1450,7 @@ elif role == "Student":
                 <h3>Hanek Technology & Business College</h3>
                 <p>Student Information System Portal</p>
             </div>
-            <div class="portal-banner">STUDENT PORTAL LOGIN</div>
+            <div class="portal-banner">🎓 STUDENT PORTAL LOGIN</div>
     """,
       unsafe_allow_html=True,
   )
@@ -1338,7 +1481,7 @@ elif role == "Student":
     st.title(f"🎓 Student Portal: {student_info['FullName']}")
 
     tab_profile, tab_grades, tab_transcript = st.tabs([
-        "Student Profile",
+        "Student Profile & Photo Upload",
         "Grade Report",
         "Smart Documents & Printing",
     ])
@@ -1346,13 +1489,43 @@ elif role == "Student":
     with tab_profile:
       col1, col2 = st.columns([1, 2])
       with col1:
+        st.markdown("### Profile Photo")
+        photo_path = student_info.get("Photo", "")
+        photo_status = student_info.get("PhotoStatus", "Not Uploaded")
+
+        if photo_path and os.path.exists(photo_path):
+          st.image(photo_path, width=150)
+        else:
+          st.info("No photo uploaded yet.")
+
+        st.markdown(f"**Photo Status:** `{photo_status}`")
+
+        uploaded_photo = st.file_uploader(
+            "Upload Passport Photo", type=["png", "jpg", "jpeg"]
+        )
+        if uploaded_photo is not None:
+          saved_path = os.path.join(PHOTO_DIR, f"{current_sid}.png")
+          with open(saved_path, "wb") as f:
+            f.write(uploaded_photo.getbuffer())
+
+          stud_df.loc[
+              stud_df["StudentID"] == current_sid,
+              ["Photo", "PhotoStatus"],
+          ] = [saved_path, "Pending Approval"]
+          stud_df.to_csv(STUDENT_FILE, index=False)
+          st.success(
+              "Photo uploaded successfully! Awaiting Admin approval."
+          )
+          st.rerun()
+
+      with col2:
         st.info(
             f"**Campus:** {student_info['Campus']}\n\n**Department:**"
             f" {student_info['Department']}\n\n**Program Level:**"
             f" {student_info['ProgramLevel']}"
             f" ({student_info.get('Modality', 'Regular')})"
         )
-      with col2:
+
         fin_df = pd.read_csv(FINANCE_FILE)
         f_record = fin_df[fin_df["StudentID"] == current_sid]
         if not f_record.empty:
@@ -1380,14 +1553,15 @@ elif role == "Student":
 
     with tab_transcript:
       st.subheader(
-          "Smart Multi-Level Academic Document Generation & Printing"
+          "Official Ethiopian University Standard Transcript & Diploma"
+          " Generator"
       )
       doc_type = st.radio(
-          "Select Document Type",
+          "Select Official Document Type",
           [
               "Official Academic Transcript (Multi-Level TVET)",
               "Temporary Grade Report (Tempo)",
-              "Original Document Copy",
+              "Official TVET Diploma Certificate",
           ],
       )
 
@@ -1400,202 +1574,273 @@ elif role == "Student":
 
       if not cleared and doc_type in [
           "Official Academic Transcript (Multi-Level TVET)",
-          "Original Document Copy",
+          "Official TVET Diploma Certificate",
       ]:
         st.error(
             "⚠️ Document generation is locked pending financial clearance."
-            " Please settle your tuition balance (ETB) with the finance office."
+            " Please settle your tuition balance (ETB)."
         )
       else:
         auth_code = generate_auth_code()
-        st.markdown(
-            f"""
-                <style>
-                    @media print {{
-                        @page {{ size: landscape; margin: 10mm; }}
-                        body {{ -webkit-print-color-adjust: exact; }}
-                    }}
-                    .transcript-box {{
-                        border: 2px solid #111;
-                        padding: 20px;
-                        border-radius: 6px;
-                        background-color: #ffffff;
-                        color: #000;
-                        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-                        font-size: 11px;
-                        width: 100%;
-                    }}
-                    .t-header {{
-                        text-align: center;
-                        border-bottom: 2px solid #111;
-                        padding-bottom: 8px;
-                        margin-bottom: 10px;
-                    }}
-                    .t-header h2 {{ margin: 0; font-size: 16px; font-weight: bold; letter-spacing: 0.5px; }}
-                    .t-header h4 {{ margin: 3px 0; font-size: 12px; color: #333; }}
-                    .t-info-table {{
-                        width: 100%;
-                        margin-bottom: 10px;
-                        font-size: 11px;
-                    }}
-                    .t-info-table td {{ padding: 2px 4px; }}
-                    .level-grid {{
-                        display: flex;
-                        flex-wrap: wrap;
-                        gap: 15px;
-                        justify-content: space-between;
-                    }}
-                    .level-card {{
-                        width: 48%;
-                        border: 1px solid #666;
-                        padding: 8px;
-                        margin-bottom: 10px;
-                        border-radius: 4px;
-                        background: #fafafa;
-                    }}
-                    .level-title {{
-                        font-weight: bold;
-                        background: #e2e8f0;
-                        padding: 3px 6px;
-                        margin-bottom: 5px;
-                        font-size: 11px;
-                        text-align: center;
-                        border-bottom: 1px solid #ccc;
-                    }}
-                    .mini-table {{
-                        width: 100%;
-                        border-collapse: collapse;
-                        font-size: 10px;
-                    }}
-                    .mini-table th, .mini-table td {{
-                        border: 1px solid #bbb;
-                        padding: 3px 5px;
-                        text-align: left;
-                    }}
-                    .mini-table th {{ background: #f1f5f9; }}
-                    .t-footer {{
-                        margin-top: 15px;
-                        border-top: 1px solid #111;
-                        padding-top: 10px;
-                        display: flex;
-                        justify-content: space-between;
-                        align-items: flex-end;
-                        font-size: 11px;
-                    }}
-                </style>
-
-                <div class="transcript-box">
-                    <div class="t-header">
-                        <h2>HANEK TECHNOLOGY AND BUSINESS COLLEGE</h2>
-                        <h4>OFFICE OF THE REGISTRAR - {student_info['Campus'].upper()} CAMPUS</h4>
-                        <div style="font-size: 12px; font-weight: bold; margin-top: 2px; text-transform: uppercase;">{doc_type}</div>
-                    </div>
-
-                    <table class="t-info-table">
-                        <tr>
-                            <td><b>Student Name:</b> {student_info['FullName']}</td>
-                            <td><b>Student ID:</b> {current_sid}</td>
-                            <td><b>Admission Year:</b> 2026</td>
-                        </tr>
-                        <tr>
-                            <td><b>Department:</b> {student_info['Department']}</td>
-                            <td><b>Program Level:</b> {student_info['ProgramLevel']} ({student_info.get('Modality', 'Regular')})</td>
-                            <td><b>Medium of Instruction:</b> English</td>
-                        </tr>
-                    </table>
-
-                    <div class="level-grid">
-            """,
-            unsafe_allow_html=True,
-        )
-
         grades_df = pd.read_csv(GRADES_FILE)
         my_grades = grades_df[grades_df["StudentID"] == current_sid]
 
-        levels = [
-            "TVET Level I",
-            "TVET Level II",
-            "TVET Level III",
-            "TVET Level IV",
-        ]
-        for lvl in levels:
-          lvl_grades = my_grades[my_grades["Level"] == lvl]
+        p_b64_tag = ""
+        s_photo = student_info.get("Photo", "")
+        if s_photo and os.path.exists(s_photo):
+          import base64
+
+          with open(s_photo, "rb") as image_file:
+            encoded_string = base64.b64encode(image_file.read()).decode()
+          p_b64_tag = f'<img src="data:image/png;base64,{encoded_string}" style="width:75px; height:90px; border:1px solid #111; object-fit: cover; float: right; margin-left: 10px;" />'
+
+        if doc_type == "Official TVET Diploma Certificate":
           st.markdown(
               f"""
-                    <div class="level-card">
-                        <div class="level-title">{lvl} Modules & Assessment</div>
-                        <table class="mini-table">
-                            <thead>
-                                <tr>
-                                    <th>Code</th>
-                                    <th>Module Title</th>
-                                    <th>Cr.Hr</th>
-                                    <th>Score</th>
-                                    <th>Grade</th>
-                                </tr>
-                            </thead>
-                            <tbody>
+                    <style>
+                        @media print {{
+                            @page {{ size: landscape; margin: 10mm; }}
+                            body {{ -webkit-print-color-adjust: exact; }}
+                        }}
+                        .diploma-box {{
+                            border: 6px double #1e3a8a;
+                            padding: 35px;
+                            background: #fffdfa;
+                            color: #111;
+                            font-family: 'Times New Roman', Times, serif;
+                            text-align: center;
+                            width: 100%;
+                        }}
+                    </style>
+                    <div class="diploma-box">
+                        <h2 style="color: #1e3a8a; margin: 0; font-size: 26px; font-weight: bold;">HANEK TECHNOLOGY AND BUSINESS COLLEGE</h2>
+                        <p style="margin: 3px 0; font-size: 14px; font-weight: bold; color: #555;">{student_info['Campus'].upper()} CAMPUS | OFFICE OF THE REGISTRAR</p>
+                        <p style="margin: 2px 0; font-size: 11px; color: #444;">Tel: +251-46-180-3164 / +251916747538 | P.O.Box: 23, Wolaita Sodo, Ethiopia</p>
+                        <p style="margin: 2px 0; font-size: 11px; color: #1e3a8a; font-weight: bold;">Website: http://www.hanekcollege.edu.et</p>
+                        <hr style="border: 1px solid #1e3a8a; width: 60%; margin: 15px auto;">
+                        
+                        <h3 style="margin: 10px 0; font-size: 20px; text-transform: uppercase; letter-spacing: 1px;">TVET LEVEL IV DIPLOMA</h3>
+                        <p style="font-size: 13px; font-style: italic; margin: 5px 0;">This is to certify that</p>
+                        <h1 style="font-size: 28px; color: #0f172a; margin: 5px 0; text-transform: uppercase;">{student_info['FullName']}</h1>
+                        <p style="font-size: 13px; line-height: 1.6; max-width: 800px; margin: 10px auto;">
+                            having successfully completed the prescribed training program and fulfilled all requirements under the Department of <b>{student_info['Department']}</b>, and having successfully passed institutional and national assessments, is hereby awarded the <b>LEVEL IV DIPLOMA</b> in <b>{student_info['Department']}</b>.
+                        </p>
+                        
+                        <table style="width: 80%; margin: 20px auto; font-size: 12px; text-align: center;">
+                            <tr>
+                                <td><b>Student ID (UID):</b> {current_sid}</td>
+                                <td><b>Admission Year:</b> 2026</td>
+                                <td><b>Medium of Instruction:</b> English</td>
+                            </tr>
+                        </table>
+
+                        <div style="display: flex; justify-content: space-between; margin-top: 40px; padding: 0 50px; font-size: 12px;">
+                            <div style="text-align: left;">
+                                <p style="margin: 2px 0;"><b>Authentication Code:</b> <span style="color: blue; font-family: monospace;">{auth_code}</span></p>
+                                <p style="margin: 2px 0; font-size: 10px; color: #666;">Official verifiable credential issued by Hanek Technology and Business College.</p>
+                            </div>
+                            <div style="text-align: right;">
+                                <p style="margin: 0 0 25px 0;">___________________________</p>
+                                <p style="margin: 0; font-weight: bold;">College Dean & Registrar Seal</p>
+                            </div>
+                        </div>
+                    </div>
+                """,
+              unsafe_allow_html=True,
+          )
+        else:
+          st.markdown(
+              f"""
+                    <style>
+                        @media print {{
+                            @page {{ size: landscape; margin: 8mm; }}
+                            body {{ -webkit-print-color-adjust: exact; }}
+                        }}
+                        .transcript-box {{
+                            border: 2px solid #111;
+                            padding: 15px;
+                            border-radius: 4px;
+                            background-color: #ffffff;
+                            color: #000;
+                            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+                            font-size: 10.5px;
+                            width: 100%;
+                        }}
+                        .t-header {{
+                            text-align: center;
+                            border-bottom: 2px solid #111;
+                            padding-bottom: 6px;
+                            margin-bottom: 8px;
+                        }}
+                        .t-header h2 {{ margin: 0; font-size: 15px; font-weight: bold; letter-spacing: 0.5px; }}
+                        .t-header h4 {{ margin: 2px 0; font-size: 11px; color: #333; }}
+                        .t-contacts {{
+                            font-size: 9.5px;
+                            color: #444;
+                            margin-top: 2px;
+                        }}
+                        .t-info-table {{
+                            width: 100%;
+                            margin-bottom: 8px;
+                            font-size: 10.5px;
+                        }}
+                        .t-info-table td {{ padding: 2px 4px; vertical-align: top; }}
+                        .level-grid {{
+                            display: flex;
+                            flex-wrap: wrap;
+                            gap: 10px;
+                            justify-content: space-between;
+                        }}
+                        .level-card {{
+                            width: 48.5%;
+                            border: 1px solid #666;
+                            padding: 6px;
+                            margin-bottom: 6px;
+                            border-radius: 3px;
+                            background: #fafafa;
+                        }}
+                        .level-title {{
+                            font-weight: bold;
+                            background: #e2e8f0;
+                            padding: 2px 4px;
+                            margin-bottom: 4px;
+                            font-size: 10.5px;
+                            text-align: center;
+                            border-bottom: 1px solid #ccc;
+                        }}
+                        .mini-table {{
+                            width: 100%;
+                            border-collapse: collapse;
+                            font-size: 9.5px;
+                        }}
+                        .mini-table th, .mini-table td {{
+                            border: 1px solid #bbb;
+                            padding: 2.5px 4px;
+                            text-align: left;
+                        }}
+                        .mini-table th {{ background: #f1f5f9; }}
+                        .t-footer {{
+                            margin-top: 10px;
+                            border-top: 1px solid #111;
+                            padding-top: 6px;
+                            display: flex;
+                            justify-content: space-between;
+                            align-items: flex-end;
+                            font-size: 10px;
+                        }}
+                    </style>
+
+                    <div class="transcript-box">
+                        <div class="t-header">
+                            {p_b64_tag}
+                            <h2>HANEK TECHNOLOGY AND BUSINESS COLLEGE</h2>
+                            <h4>OFFICE OF THE REGISTRAR — {student_info['Campus'].upper()} CAMPUS</h4>
+                            <div class="t-contacts">
+                                Tel: +251-46-180-3164 / +251916747538 | P.O.Box: 23, Wolaita Sodo, Ethiopia<br>
+                                <b>Website:</b> http://www.hanekcollege.edu.et | <b>Email:</b> registrar@hanekcollege.edu.et
+                            </div>
+                            <div style="font-size: 11px; font-weight: bold; margin-top: 3px; text-transform: uppercase; color: #1e3a8a;">{doc_type}</div>
+                        </div>
+
+                        <table class="t-info-table">
+                            <tr>
+                                <td><b>Student Name:</b> {student_info['FullName']}</td>
+                                <td><b>Student ID (UID):</b> {current_sid}</td>
+                                <td><b>Admission Year:</b> 2026</td>
+                            </tr>
+                            <tr>
+                                <td><b>Department:</b> {student_info['Department']}</td>
+                                <td><b>Program Level:</b> {student_info['ProgramLevel']} ({student_info.get('Modality', 'Regular')})</td>
+                                <td><b>Medium of Instruction:</b> English</td>
+                            </tr>
+                        </table>
+
+                        <div class="level-grid">
                 """,
               unsafe_allow_html=True,
           )
 
-          if not lvl_grades.empty:
-            for _, row in lvl_grades.iterrows():
-              st.markdown(
-                  f"""
-                        <tr>
-                            <td>{row['CourseCode']}</td>
-                            <td>{row['CourseName']}</td>
-                            <td>{row['CreditHour']}</td>
-                            <td>{row['Score']}</td>
-                            <td>{row['Grade']}</td>
-                        </tr>
+          levels = [
+              "TVET Level I",
+              "TVET Level II",
+              "TVET Level III",
+              "TVET Level IV",
+          ]
+          for lvl in levels:
+            lvl_grades = my_grades[my_grades["Level"] == lvl]
+            st.markdown(
+                f"""
+                        <div class="level-card">
+                            <div class="level-title">{lvl} Modules & Assessment</div>
+                            <table class="mini-table">
+                                <thead>
+                                    <tr>
+                                        <th>Code</th>
+                                        <th>Module Title</th>
+                                        <th>Cr.Hr</th>
+                                        <th>Score</th>
+                                        <th>Grade</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
                     """,
+                unsafe_allow_html=True,
+            )
+
+            if not lvl_grades.empty:
+              for _, row in lvl_grades.iterrows():
+                st.markdown(
+                    f"""
+                            <tr>
+                                <td>{row['CourseCode']}</td>
+                                <td>{row['CourseName']}</td>
+                                <td>{row['CreditHour']}</td>
+                                <td>{row['Score']}</td>
+                                <td>{row['Grade']}</td>
+                            </tr>
+                        """,
+                    unsafe_allow_html=True,
+                )
+            else:
+              st.markdown(
+                  """
+                            <tr>
+                                <td colspan="5" style="text-align: center; color: #777;">No modules recorded for this level.</td>
+                            </tr>
+                        """,
                   unsafe_allow_html=True,
               )
-          else:
+
             st.markdown(
                 """
-                        <tr>
-                            <td colspan="5" style="text-align: center; color: #777;">No modules recorded for this level.</td>
-                        </tr>
+                                </tbody>
+                            </table>
+                        </div>
                     """,
                 unsafe_allow_html=True,
             )
 
           st.markdown(
-              """
-                            </tbody>
-                        </table>
+              f"""
+                        </div>
+
+                        <div class="t-footer">
+                            <div>
+                                <p style="margin: 2px 0;"><b>Authentication Code:</b> <span style="color: blue; font-family: monospace;">{auth_code}</span></p>
+                                <p style="margin: 2px 0; font-size: 9.5px; color: #555;">This document is electronically verified by Hanek Technology and Business College Registrar System.</p>
+                            </div>
+                            <div style="text-align: right;">
+                                <p style="margin: 12px 0 2px 0;">___________________________</p>
+                                <p style="margin: 0; font-weight: bold;">Registrar Office Seal & Signature</p>
+                            </div>
+                        </div>
                     </div>
                 """,
               unsafe_allow_html=True,
           )
 
-        st.markdown(
-            f"""
-                    </div>
-
-                    <div class="t-footer">
-                        <div>
-                            <p style="margin: 2px 0;"><b>Authentication Code:</b> <span style="color: blue; font-family: monospace;">{auth_code}</span></p>
-                            <p style="margin: 2px 0; font-size: 10px; color: #555;">This document is electronically verified by Hanek Technology and Business College Registrar System. Any alteration invalidates this document.</p>
-                        </div>
-                        <div style="text-align: right;">
-                            <p style="margin: 15px 0 2px 0;">___________________________</p>
-                            <p style="margin: 0; font-weight: bold;">Registrar Office Seal & Signature</p>
-                        </div>
-                    </div>
-                </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
         if st.button("🖨️ Print / Save Document"):
-          st.success(
-              f"Document generated successfully with Authentication Code:"
-              f" {auth_code}"
-          )
+          st.success(f"Document generated with Authentication Code: {auth_code}")
 
 # --- DEVELOPER FOOTER BRANDING ---
 st.markdown("---")
