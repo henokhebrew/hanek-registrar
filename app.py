@@ -362,7 +362,6 @@ if role == "Home / Public Announcements & Contacts":
           unsafe_allow_html=True,
       )
 
-  # --- INSTITUTIONAL COMMUNICATIONS & DIRECTORATE LIAISON (CONTACT US) ---
   st.markdown("---")
   st.markdown(
       "### 📞 Institutional Communications & Directorate Liaison (Contact"
@@ -1192,13 +1191,13 @@ elif role == "Head Registrar & Administration":
 
           if doc_type == "Official TVET Diploma Certificate":
             st.markdown(
-                f"""
+                """
                         <style>
-                            @media print {{
-                                @page {{ size: landscape; margin: 10mm; }}
-                                body {{ -webkit-print-color-adjust: exact; }}
-                            }}
-                            .diploma-box {{
+                            @media print {
+                                @page { size: landscape; margin: 10mm; }
+                                body { -webkit-print-color-adjust: exact; }
+                            }
+                            .diploma-box {
                                 border: 6px double #1e3a8a;
                                 padding: 35px;
                                 background: #fffdfa;
@@ -1206,8 +1205,13 @@ elif role == "Head Registrar & Administration":
                                 font-family: 'Times New Roman', Times, serif;
                                 text-align: center;
                                 width: 100%;
-                            }}
+                            }
                         </style>
+                        """,
+                unsafe_allow_html=True,
+            )
+            st.markdown(
+                f"""
                         <div class="diploma-box">
                             <h2 style="color: #1e3a8a; margin: 0; font-size: 26px; font-weight: bold;">HANEK TECHNOLOGY AND BUSINESS COLLEGE</h2>
                             <p style="margin: 3px 0; font-size: 14px; font-weight: bold; color: #555;">OFFICE OF THE REGISTRAR</p>
@@ -1246,13 +1250,13 @@ elif role == "Head Registrar & Administration":
             )
           else:
             st.markdown(
-                f"""
+                """
                         <style>
-                            @media print {{
-                                @page {{ size: landscape; margin: 8mm; }}
-                                body {{ -webkit-print-color-adjust: exact; }}
-                            }}
-                            .transcript-box {{
+                            @media print {
+                                @page { size: landscape; margin: 8mm; }
+                                body { -webkit-print-color-adjust: exact; }
+                            }
+                            .transcript-box {
                                 border: 2px solid #111;
                                 padding: 15px;
                                 border-radius: 4px;
@@ -1261,41 +1265,41 @@ elif role == "Head Registrar & Administration":
                                 font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
                                 font-size: 10.5px;
                                 width: 100%;
-                            }}
-                            .t-header {{
+                            }
+                            .t-header {
                                 text-align: center;
                                 border-bottom: 2px solid #111;
                                 padding-bottom: 6px;
                                 margin-bottom: 8px;
-                            }}
-                            .t-header h2 {{ margin: 0; font-size: 15px; font-weight: bold; letter-spacing: 0.5px; }}
-                            .t-header h4 {{ margin: 2px 0; font-size: 11px; color: #333; }}
-                            .t-contacts {{
+                            }
+                            .t-header h2 { margin: 0; font-size: 15px; font-weight: bold; letter-spacing: 0.5px; }
+                            .t-header h4 { margin: 2px 0; font-size: 11px; color: #333; }
+                            .t-contacts {
                                 font-size: 9.5px;
                                 color: #444;
                                 margin-top: 2px;
-                            }}
-                            .t-info-table {{
+                            }
+                            .t-info-table {
                                 width: 100%;
                                 margin-bottom: 8px;
                                 font-size: 10.5px;
-                            }}
-                            .t-info-table td {{ padding: 2px 4px; vertical-align: top; }}
-                            .level-grid {{
+                            }
+                            .t-info-table td { padding: 2px 4px; vertical-align: top; }
+                            .level-grid {
                                 display: flex;
                                 flex-wrap: wrap;
                                 gap: 10px;
                                 justify-content: space-between;
-                            }}
-                            .level-card {{
+                            }
+                            .level-card {
                                 width: 48.5%;
                                 border: 1px solid #666;
                                 padding: 6px;
                                 margin-bottom: 6px;
                                 border-radius: 3px;
                                 background: #fafafa;
-                            }}
-                            .level-title {{
+                            }
+                            .level-title {
                                 font-weight: bold;
                                 background: #e2e8f0;
                                 padding: 2px 4px;
@@ -1303,19 +1307,19 @@ elif role == "Head Registrar & Administration":
                                 font-size: 10.5px;
                                 text-align: center;
                                 border-bottom: 1px solid #ccc;
-                            }}
-                            .mini-table {{
+                            }
+                            .mini-table {
                                 width: 100%;
                                 border-collapse: collapse;
                                 font-size: 9.5px;
-                            }}
-                            .mini-table th, .mini-table td {{
+                            }
+                            .mini-table th, .mini-table td {
                                 border: 1px solid #bbb;
                                 padding: 2.5px 4px;
                                 text-align: left;
-                            }}
-                            .mini-table th {{ background: #f1f5f9; }}
-                            .t-footer {{
+                            }
+                            .mini-table th { background: #f1f5f9; }
+                            .t-footer {
                                 margin-top: 10px;
                                 border-top: 1px solid #111;
                                 padding-top: 6px;
@@ -1323,13 +1327,567 @@ elif role == "Head Registrar & Administration":
                                 justify-content: space-between;
                                 align-items: flex-end;
                                 font-size: 10px;
-                            }}
+                            }
                         </style>
-
+                        """,
+                unsafe_allow_html=True,
+            )
+            st.markdown(
+                f"""
                         <div class="transcript-box">
                             <div class="t-header">
                                 {p_b64_tag}
                                 <h2>HANEK TECHNOLOGY AND BUSINESS COLLEGE</h2>
                                 <h4>OFFICE OF THE REGISTRAR</h4>
                                 <div class="t-contacts">
-                                    Tel: +251-46-180-
+                                    Tel: +251-46-180-3164 / +251916747538 | P.O.Box: 23, Wolaita Sodo, Ethiopia<br>
+                                    <b>Website:</b> http://www.hanekcollege.edu.et | <b>Email:</b> registrar@hanekcollege.edu.et
+                                </div>
+                                <div style="font-size: 11px; font-weight: bold; margin-top: 3px; text-transform: uppercase; color: #1e3a8a;">{doc_type}</div>
+                            </div>
+
+                            <table class="t-info-table">
+                                <tr>
+                                    <td><b>Student Name:</b> {s_info['FullName']}</td>
+                                    <td><b>Student ID (UID):</b> {sel_sid}</td>
+                                    <td><b>Admission Year:</b> 2026</td>
+                                </tr>
+                                <tr>
+                                    <td><b>Department:</b> {s_info['Department']}</td>
+                                    <td><b>Program Level:</b> {s_info['ProgramLevel']} ({s_info.get('Modality', 'Regular')})</td>
+                                    <td><b>Medium of Instruction:</b> English</td>
+                                </tr>
+                            </table>
+
+                            <div class="level-grid">
+                    """,
+                unsafe_allow_html=True,
+            )
+
+            levels = [
+                "TVET Level I",
+                "TVET Level II",
+                "TVET Level III",
+                "TVET Level IV",
+            ]
+            for lvl in levels:
+              lvl_grades = s_grades[s_grades["Level"] == lvl]
+              st.markdown(
+                  f"""
+                            <div class="level-card">
+                                <div class="level-title">{lvl} Modules & Assessment</div>
+                                <table class="mini-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Code</th>
+                                            <th>Module Title</th>
+                                            <th>Cr.Hr</th>
+                                            <th>Score</th>
+                                            <th>Grade</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                        """,
+                  unsafe_allow_html=True,
+              )
+
+              if not lvl_grades.empty:
+                for _, row in lvl_grades.iterrows():
+                  st.markdown(
+                      f"""
+                                <tr>
+                                    <td>{row['CourseCode']}</td>
+                                    <td>{row['CourseName']}</td>
+                                    <td>{row['CreditHour']}</td>
+                                    <td>{row['Score']}</td>
+                                    <td>{row['Grade']}</td>
+                                </tr>
+                            """,
+                      unsafe_allow_html=True,
+                  )
+              else:
+                st.markdown(
+                    """
+                                <tr>
+                                    <td colspan="5" style="text-align: center; color: #777;">No modules recorded for this level.</td>
+                                </tr>
+                            """,
+                    unsafe_allow_html=True,
+                )
+
+              st.markdown(
+                  """
+                                    </tbody>
+                                </table>
+                            </div>
+                        """,
+                  unsafe_allow_html=True,
+              )
+
+            st.markdown(
+                f"""
+                            </div>
+
+                            <div class="t-footer">
+                                <div>
+                                    <p style="margin: 2px 0;"><b>Authentication Code:</b> <span style="color: blue; font-family: monospace;">{auth_code}</span></p>
+                                    <p style="margin: 2px 0; font-size: 9.5px; color: #555;">Official Academic Record issued by Hanek Technology and Business College. Verify authenticity at the Office of the Registrar.</p>
+                                </div>
+                                <div style="text-align: right;">
+                                    <p style="margin: 12px 0 2px 0;">___________________________</p>
+                                    <p style="margin: 0; font-weight: bold;">Head Registrar Seal & Signature</p>
+                                </div>
+                            </div>
+                        </div>
+                    """,
+                unsafe_allow_html=True,
+            )
+
+          st.info(
+              "🖨️ **Head Registrar Print Authorization:** Press `Ctrl + P` to"
+              " print this official document in **Landscape** orientation."
+          )
+
+    with tab10:
+      st.subheader("⚙️ System Configuration & Database Health Audit")
+      st.write(
+          f"Total Registered Students: {len(pd.read_csv(STUDENT_FILE))}"
+      )
+      st.write(f"Total Registered Staff & Officers: {len(pd.read_csv(STAFF_FILE))}")
+      st.write(
+          f"Pending Grade Submissions Awaiting Audit:"
+          f" {len(pd.read_csv(PENDING_FILE))}"
+      )
+      st.write(f"Official Posted Grades: {len(pd.read_csv(GRADES_FILE))}")
+      st.write(f"Total Admissions Applications: {len(pd.read_csv(APPLICATIONS_FILE))}")
+
+      st.markdown("---")
+      st.markdown("### Upload Official Institution Logo")
+      uploaded_logo = st.file_uploader(
+          "Choose logo image (PNG / JPG)", type=["png", "jpg", "jpeg"]
+      )
+      if uploaded_logo is not None:
+        with open(LOGO_FILE, "wb") as f:
+          f.write(uploaded_logo.getbuffer())
+        st.success("Institutional logo uploaded successfully!")
+
+# --- STAFF & REGISTRAR OFFICERS PORTAL ---
+elif role == "Staff & Registrar Officers":
+  st.markdown("<br>", unsafe_allow_html=True)
+  st.markdown(
+      """
+        <div class="univ-card">
+            <div class="univ-header">
+    """,
+      unsafe_allow_html=True,
+  )
+
+  if os.path.exists(LOGO_FILE):
+    st.image(LOGO_FILE, width=90)
+
+  st.markdown(
+      """
+                <h3>Hanek Technology & Business College</h3>
+                <p>Staff & Registrar Officers Authentication</p>
+            </div>
+            <div class="portal-banner">👨‍🏫 STAFF & OFFICER PORTAL LOGIN</div>
+    """,
+      unsafe_allow_html=True,
+  )
+
+  st_id_in = st.text_input("Staff Identification ID")
+  st_pass_in = st.text_input("Password", type="password")
+
+  if st.button("Staff Login", use_container_width=True):
+    staff_df = pd.read_csv(STAFF_FILE)
+    match = staff_df[
+        (staff_df["StaffID"] == st_id_in)
+        & (staff_df["Password"] == st_pass_in)
+    ]
+    if not match.empty:
+      st.session_state["staff_logged"] = st_id_in
+      st.session_state["staff_name"] = match.iloc[0]["FullName"]
+      st.session_state["staff_role"] = match.iloc[0]["Role"]
+      st.session_state["staff_dept"] = match.iloc[0]["Department"]
+      st.session_state["staff_email"] = match.get(
+          "InstitutionalEmail", pd.Series([""])
+      ).iloc[0]
+      st.success(
+          f"Welcome, {match.iloc[0]['Role']} {match.iloc[0]['FullName']}"
+      )
+      st.rerun()
+    else:
+      st.error("Invalid Staff Credentials")
+
+  st.markdown("</div>", unsafe_allow_html=True)
+
+  if "staff_logged" in st.session_state:
+    st.markdown("---")
+    s_role = st.session_state["staff_role"]
+    st.title(
+        f"👨‍🏫 Staff Portal: {st.session_state['staff_name']} ({s_role})"
+    )
+    st.info(
+        f"📧 **Institutional Email:**"
+        f" {st.session_state.get('staff_email', 'Not Assigned')}"
+    )
+
+    if s_role in ["Instructor / Lecturer", "Department Head"]:
+      st.markdown("### 📝 Submit Module Grades (Awaiting Head Registrar Audit)")
+      students_df = pd.read_csv(STUDENT_FILE)
+      if students_df.empty:
+        st.warning("No students found in institutional repository.")
+      else:
+        with st.form("submit_grade_form"):
+          target_student = st.selectbox(
+              "Select Student Identification & Name",
+              students_df["StudentID"]
+              + " - "
+              + students_df["FullName"]
+              + " ("
+              + students_df["Department"]
+              + ")",
+          )
+
+          selected_sid = target_student.split(" - ")[0]
+          student_row = students_df[
+              students_df["StudentID"] == selected_sid
+          ].iloc[0]
+
+          c_level = st.selectbox(
+              "Select TVET Level",
+              [
+                  "TVET Level I",
+                  "TVET Level II",
+                  "TVET Level III",
+                  "TVET Level IV",
+              ],
+          )
+          c_code = st.text_input("Module / Course Code (e.g., COAC-311)")
+          c_name = st.text_input("Module / Course Title")
+          c_credit = st.number_input(
+              "Credit Hours", min_value=1, max_value=10, value=3
+          )
+          score = st.number_input(
+              "Numerical Score (0 - 100)",
+              min_value=0.0,
+              max_value=100.0,
+              value=75.0,
+          )
+          semester = st.selectbox("Semester", ["Semester I", "Semester II"])
+
+          if st.form_submit_button(
+              "Submit Grade to Head Registrar for Audit"
+          ):
+            if c_code and c_name:
+              pending_df = pd.read_csv(PENDING_FILE)
+              grade_val, gp, _ = calculate_grade(score)
+              new_pending = pd.DataFrame([{
+                  "PendingID": "".join(
+                      random.choices(string.ascii_uppercase + string.digits, k=6)
+                  ),
+                  "StudentID": selected_sid,
+                  "FullName": student_row["FullName"],
+                  "CourseCode": c_code,
+                  "CourseName": c_name,
+                  "CreditHour": c_credit,
+                  "Score": score,
+                  "Grade": f"{grade_val} ({gp})",
+                  "Level": c_level,
+                  "Semester": semester,
+                  "Instructor": st.session_state["staff_name"],
+              }])
+              pending_df = pd.concat(
+                  [pending_df, new_pending], ignore_index=True
+              )
+              pending_df.to_csv(PENDING_FILE, index=False)
+              st.success(
+                  f"Grade successfully submitted for {c_name} ({c_level})!"
+                  " Awaiting Head Registrar review and final authorization."
+              )
+            else:
+              st.error("Please provide both module code and title.")
+
+    elif s_role in ["Finance & Procurement Officer"]:
+      st.markdown(
+          "### 💰 Student Financial Accounts & Ledger Management (ETB)"
+      )
+      fin_df = pd.read_csv(FINANCE_FILE)
+      students_df = pd.read_csv(STUDENT_FILE)
+      st.dataframe(fin_df, use_container_width=True)
+
+      with st.form("finance_officer_form"):
+        st.markdown("### Update Student Tuition Balance & Clearance")
+        f_sid = st.selectbox(
+            "Select Student ID",
+            students_df["StudentID"].tolist()
+            if not students_df.empty
+            else [],
+        )
+        tot_fee = st.number_input("Total Tuition Fee (ETB)", value=15000.0)
+        paid_fee = st.number_input("Amount Paid (ETB)", value=0.0)
+        f_status = st.selectbox(
+            "Financial Clearance Status",
+            ["Pending Clearance", "Fully Cleared"],
+        )
+
+        if st.form_submit_button("Update Financial Ledger"):
+          if f_sid:
+            if not fin_df.empty and f_sid in fin_df["StudentID"].values:
+              fin_df.loc[fin_df["StudentID"] == f_sid, [
+                  "TotalFeeETB",
+                  "PaidETB",
+                  "Status",
+              ]] = [tot_fee, paid_fee, f_status]
+            else:
+              new_f = pd.DataFrame([{
+                  "StudentID": f_sid,
+                  "TotalFeeETB": tot_fee,
+                  "PaidETB": paid_fee,
+                  "Status": f_status,
+                  "LastUpdated": pd.Timestamp.now().strftime("%Y-%m-%d"),
+              }])
+              fin_df = pd.concat([fin_df, new_f], ignore_index=True)
+            fin_df.to_csv(FINANCE_FILE, index=False)
+            st.success("Financial ledger updated successfully!")
+            st.rerun()
+
+    elif s_role in [
+        "Assistant Registrar",
+        "Registrar Officer / Credential Specialist",
+        "Senior Secretary",
+    ]:
+      st.markdown("### 📋 Student Operational Registration & Records Assistance")
+      students_df = pd.read_csv(STUDENT_FILE)
+      departments_list = get_departments()
+      programs_list = get_programs()
+
+      with st.expander("➕ Register New Student Record", expanded=True):
+        with st.form("assistant_reg_form"):
+          col1, col2 = st.columns(2)
+          with col1:
+            s_id = st.text_input("Student ID (e.g., HBC/001/26)")
+            s_name = st.text_input("Full Legal Name")
+            s_campus = st.selectbox("Assigned Campus", CAMPUSES)
+          with col2:
+            s_dept = st.selectbox("Department", departments_list)
+            s_prog = st.selectbox("Program Level", programs_list)
+            s_mod = st.selectbox("Modality", ["Regular", "Extension"])
+            s_pass = st.text_input("Default Student Password", type="password")
+
+          if st.form_submit_button("Submit Student Enrollment"):
+            if s_id and s_name:
+              if s_id in students_df["StudentID"].values:
+                st.error("Student ID already exists.")
+              else:
+                new_row = pd.DataFrame([{
+                    "StudentID": s_id,
+                    "FullName": s_name,
+                    "Campus": s_campus,
+                    "Department": s_dept,
+                    "ProgramLevel": s_prog,
+                    "Modality": s_mod,
+                    "Year": "1",
+                    "Password": s_pass,
+                    "Photo": "",
+                    "PhotoStatus": "Not Uploaded",
+                }])
+                students_df = pd.concat(
+                    [students_df, new_row], ignore_index=True
+                )
+                students_df.to_csv(STUDENT_FILE, index=False)
+                st.success(
+                    f"Student {s_name} registered successfully! Awaiting Head"
+                    " Registrar audit."
+                )
+                st.rerun()
+
+      st.markdown("---")
+      st.markdown("### Current Student Database Directory")
+      st.dataframe(students_df, use_container_width=True)
+
+    else:
+      st.info(
+          f"Welcome, {s_role}. You are authenticated on the Hanek Technology"
+          " and Business College institutional network."
+      )
+
+# --- STUDENT PORTAL ---
+elif role == "Student Portal":
+  st.markdown("<br>", unsafe_allow_html=True)
+  st.markdown(
+      """
+        <div class="univ-card">
+            <div class="univ-header">
+    """,
+      unsafe_allow_html=True,
+  )
+
+  if os.path.exists(LOGO_FILE):
+    st.image(LOGO_FILE, width=90)
+
+  st.markdown(
+      """
+                <h3>Hanek Technology & Business College</h3>
+                <p>Student Information System Portal</p>
+            </div>
+            <div class="portal-banner">🎓 STUDENT PORTAL LOGIN</div>
+    """,
+      unsafe_allow_html=True,
+  )
+
+  sid_in = st.text_input("Student Identification ID")
+  spass_in = st.text_input("Password", type="password")
+
+  if st.button("Student Login", use_container_width=True):
+    stud_df = pd.read_csv(STUDENT_FILE)
+    match = stud_df[
+        (stud_df["StudentID"] == sid_in) & (stud_df["Password"] == spass_in)
+    ]
+    if not match.empty:
+      st.session_state["student_logged"] = sid_in
+      st.success("Authenticated successfully!")
+      st.rerun()
+    else:
+      st.error("Invalid Student ID or Password")
+
+  st.markdown("</div>", unsafe_allow_html=True)
+
+  if "student_logged" in st.session_state:
+    st.markdown("---")
+    current_sid = st.session_state["student_logged"]
+    stud_df = pd.read_csv(STUDENT_FILE)
+    student_info = stud_df[stud_df["StudentID"] == current_sid].iloc[0]
+
+    st.title(f"🎓 Student Portal: {student_info['FullName']}")
+
+    tab_profile, tab_grades, tab_credentials = st.tabs([
+        "Student Profile",
+        "Academic Performance",
+        "Official Credentials & Verification",
+    ])
+
+    with tab_profile:
+      col1, col2 = st.columns([1, 2])
+      with col1:
+        st.markdown("### Profile Photograph")
+        photo_path = student_info.get("Photo", "")
+        photo_status = student_info.get("PhotoStatus", "Not Uploaded")
+
+        if (
+            isinstance(photo_path, str)
+            and photo_path != ""
+            and os.path.exists(photo_path)
+        ):
+          st.image(photo_path, width=150)
+        else:
+          st.info("No photograph uploaded yet.")
+
+        st.markdown(f"**Photograph Status:** `{photo_status}`")
+
+        uploaded_photo = st.file_uploader(
+            "Upload Passport Photograph", type=["png", "jpg", "jpeg"]
+        )
+        if uploaded_photo is not None:
+          saved_path = os.path.join(PHOTO_DIR, f"{current_sid}.png")
+          with open(saved_path, "wb") as f:
+            f.write(uploaded_photo.getbuffer())
+
+          stud_df.loc[
+              stud_df["StudentID"] == current_sid,
+              ["Photo", "PhotoStatus"],
+          ] = [saved_path, "Pending Approval"]
+          stud_df.to_csv(STUDENT_FILE, index=False)
+          st.success(
+              "Photograph uploaded successfully! Awaiting Head Registrar"
+              " authorization."
+          )
+          st.rerun()
+
+      with col2:
+        st.info(
+            f"**Campus:** {student_info['Campus']}\n\n**Department:**"
+            f" {student_info['Department']}\n\n**Program Level:**"
+            f" {student_info['ProgramLevel']}"
+            f" ({student_info.get('Modality', 'Regular')})"
+        )
+
+        fin_df = pd.read_csv(FINANCE_FILE)
+        f_record = fin_df[fin_df["StudentID"] == current_sid]
+        if not f_record.empty:
+          status = f_record.iloc[0]["Status"]
+          paid = f_record.iloc[0]["PaidETB"]
+          total = f_record.iloc[0]["TotalFeeETB"]
+          st.metric(
+              label="Financial Status (ETB)",
+              value=status,
+              delta=f"Paid: {paid} ETB / Total: {total} ETB",
+          )
+        else:
+          st.metric(
+              label="Financial Status (ETB)", value="No Financial Record"
+          )
+
+    with tab_grades:
+      st.subheader("Academic Performance & Course Grades")
+      grades_df = pd.read_csv(GRADES_FILE)
+      my_grades = grades_df[grades_df["StudentID"] == current_sid]
+      if my_grades.empty:
+        st.info("No authorized grades available yet.")
+      else:
+        st.dataframe(my_grades, use_container_width=True)
+
+    with tab_credentials:
+      st.subheader("Official Academic Credentials & Verification")
+      st.write(
+          "Here you can view your official academic transcripts and grade"
+          " reports. For security and anti-forgery compliance, **direct"
+          " printing of official transcripts, temporary grade reports, and"
+          " diplomas is exclusively restricted to the Office of the Head"
+          " Registrar.** You may save or download a secure digital copy for"
+          " your personal records."
+      )
+
+      doc_type = st.radio(
+          "Select Official Document Type",
+          [
+              "Official Academic Transcript (Multi-Level TVET)",
+              "Temporary Grade Report (Tempo)",
+              "Official TVET Diploma Certificate",
+          ],
+      )
+
+      fin_df = pd.read_csv(FINANCE_FILE)
+      cleared = True
+      if not fin_df.empty:
+        f_chk = fin_df[fin_df["StudentID"] == current_sid]
+        if not f_chk.empty and f_chk.iloc[0]["Status"] != "Fully Cleared":
+          cleared = False
+
+      if not cleared and doc_type in [
+          "Official Academic Transcript (Multi-Level TVET)",
+          "Official TVET Diploma Certificate",
+      ]:
+        st.error(
+            "⚠️ Document access is locked pending financial clearance. Please"
+            " settle your tuition balance (ETB)."
+        )
+      else:
+        auth_code = generate_auth_code()
+        grades_df = pd.read_csv(GRADES_FILE)
+        my_grades = grades_df[grades_df["StudentID"] == current_sid]
+
+        p_b64_tag = ""
+        s_photo = student_info.get("Photo", "")
+        if (
+            isinstance(s_photo, str)
+            and s_photo != ""
+            and os.path.exists(s_photo)
+        ):
+          import base64
+
+          with open(s_photo, "rb") as image_file:
+            encoded_string = base64.b64encode(image_file.read()).decode()
+          p_b64_tag = f'<img src="data:image/png;base64,{encoded_string}" style="width:75px; height:90px; border:1px solid #111; object-fit: cover; float: right; margin-left: 10px;" />'
+
+        if doc_type ==
