@@ -20,6 +20,8 @@ ADMIN_FILE = "admin.csv"
 FINANCE_FILE = "finances.csv"
 DEPT_FILE = "departments.csv"
 PROG_FILE = "programs.csv"
+ANNOUNCE_FILE = "announcements.csv"
+APPLICATIONS_FILE = "applications.csv"
 LOGO_FILE = "logo.png"
 
 CAMPUSES = ["Wolaita Sodo", "Basketo Laska", "Boloso Bombe", "Jinka"]
@@ -151,6 +153,26 @@ def init_csvs():
   if not os.path.exists(PROG_FILE):
     pd.DataFrame({"Program": DEFAULT_PROGRAMS}).to_csv(PROG_FILE, index=False)
 
+  if not os.path.exists(ANNOUNCE_FILE):
+    pd.DataFrame(
+        columns=["NoticeID", "Title", "Date", "Category", "Content"]
+    ).to_csv(ANNOUNCE_FILE, index=False)
+
+  if not os.path.exists(APPLICATIONS_FILE):
+    pd.DataFrame(
+        columns=[
+            "AppID",
+            "FullName",
+            "Phone",
+            "Campus",
+            "Department",
+            "ProgramLevel",
+            "Modality",
+            "Status",
+            "DateSubmitted",
+        ]
+    ).to_csv(APPLICATIONS_FILE, index=False)
+
 
 init_csvs()
 
@@ -201,6 +223,57 @@ def calculate_grade(score):
     return "F", 0.0
 
 
+# --- CSS STYLING FOR UNIVERSITY PORTAL CARD MODE ---
+st.markdown(
+    """
+    <style>
+        .univ-card {
+            background-color: #ffffff;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            padding: 25px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            max-width: 500px;
+            margin: 0 auto;
+            color: #1e293b;
+        }
+        .univ-header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .univ-header h3 {
+            color: #0f172a;
+            margin: 10px 0 5px 0;
+            font-size: 20px;
+            font-weight: bold;
+        }
+        .univ-header p {
+            color: #64748b;
+            font-size: 13px;
+            margin: 0;
+        }
+        .portal-banner {
+            background-color: #1e3a8a;
+            color: white;
+            padding: 10px 15px;
+            border-radius: 6px;
+            text-align: center;
+            font-weight: bold;
+            margin-bottom: 15px;
+            font-size: 14px;
+        }
+        .notice-card {
+            background: #f8fafc;
+            border-left: 4px solid #1e3a8a;
+            padding: 12px 15px;
+            margin-bottom: 10px;
+            border-radius: 4px;
+        }
+    </style>
+""",
+    unsafe_allow_html=True,
+)
+
 # --- SIDEBAR PORTAL NAVIGATION & BRANDING ---
 st.sidebar.markdown(
     "<h3 style='text-align: center;'>Hanek College Portal</h3>",
@@ -218,54 +291,123 @@ else:
 st.sidebar.markdown("---")
 role = st.sidebar.selectbox(
     "Select Portal Access",
-    ["Home Dashboard", "Admin / Registrar", "Staff / Instructor", "Student"],
+    [
+        "Home / Public Announcements",
+        "Online Admission Application",
+        "Admin / Registrar",
+        "Staff / Instructor",
+        "Student",
+    ],
 )
 
-# --- HOME / LANDING DASHBOARD ---
-if role == "Home Dashboard":
-  col1, col2 = st.columns([3, 1])
+# --- HOME / PUBLIC ANNOUNCEMENTS DASHBOARD ---
+if role == "Home / Public Announcements":
+  col1, col2 = st.columns([2, 1])
   with col1:
     st.title("HANEK TECHNOLOGY AND BUSINESS COLLEGE")
-    st.subheader("Office of the Registrar & Student Information System")
+    st.subheader(
+        "Official Multi-Campus Registrar & Student Information System"
+    )
     st.write(
-        "Welcome to the official institutional portal serving Wolaita Sodo,"
-        " Basketo Laska, Boloso Bombe, and Jinka campuses. Manage complete"
-        " student admissions, faculty records with institutional email"
-        " directory, academic departments, program modalities, grade"
-        " approvals, financial clearance in Ethiopian Birr (ETB), and smart"
-        " landscape-optimized academic document printing."
+        "Welcome to the official institutional portal serving **Wolaita Sodo,"
+        " Basketo Laska, Boloso Bombe, and Jinka** campuses. Explore public"
+        " announcements, submit new online admission applications, or access"
+        " secure portal logins."
     )
   with col2:
     if os.path.exists(LOGO_FILE):
-      st.image(LOGO_FILE, width=150)
+      st.image(LOGO_FILE, width=180)
 
   st.markdown("---")
-  st.markdown("### 🏛️ Core Registrar Services")
+  st.markdown("### 📢 Public Announcements & Institutional Notices")
 
+  ann_df = pd.read_csv(ANNOUNCE_FILE)
+  if ann_df.empty:
+    st.info(
+        "No public announcements currently posted. Check back soon for urgent"
+        " notices!"
+    )
+  else:
+    for _, row in ann_df.iterrows():
+      st.markdown(
+          f"""
+                <div class="notice-card">
+                    <h4 style="margin: 0; color: #1e3a8a;">{row['Title']}</h4>
+                    <p style="font-size: 11px; color: #64748b; margin: 2px 0 8px 0;"><b>Date:</b> {row['Date']} | <b>Category:</b> {row['Category']}</p>
+                    <p style="margin: 0; font-size: 13px; color: #334155;">{row['Content']}</p>
+                </div>
+            """,
+          unsafe_allow_html=True,
+      )
+
+  st.markdown("---")
+  st.markdown("### 🏛️ Quick Portal Access Gateways")
   c1, c2, c3 = st.columns(3)
   with c1:
-    st.info(
-        "**📋 Complete Record Administration**\n\nFull CRUD controls to add,"
-        " edit, rename, and delete student, staff (with institutional email),"
-        " department, and program datasets dynamically."
+    st.success(
+        "**📋 Online Application**\n\nProspective students can apply directly"
+        " for TVET and Degree programs."
     )
   with c2:
-    st.info(
-        "**🔒 Grade Workflow & Finance**\n\nInstructor grade submissions with"
-        " registrar verification and ETB tuition clearance locks."
+    st.warning(
+        "**🛡️ Admin & Registrar**\n\nManage admissions, staff directory,"
+        " announcements, and grade approvals."
     )
   with c3:
-    st.info(
-        "**🖨️ Smart Landscape Printing**\n\nOptimized multi-level TVET"
-        " transcripts, temporary reports (Tempo), and original certificates"
-        " with authentication codes."
+    st.error(
+        "**🎓 Student & Staff Portals**\n\nSecure login for semester grades,"
+        " transcripts, and grade postings."
     )
 
-  st.markdown("---")
-  st.markdown(
-      "📌 **Please select your portal role from the sidebar dropdown menu** to"
-      " proceed to Admin, Staff, or Student login."
+# --- ONLINE ADMISSION APPLICATION PORTAL ---
+elif role == "Online Admission Application":
+  st.title("📋 Online Admission Application Portal")
+  st.write(
+      "Prospective students seeking admission to Hanek Technology and Business"
+      " College across **Wolaita Sodo, Basketo Laska, Boloso Bombe, and Jinka**"
+      " campuses may submit their application below."
   )
+
+  departments_list = get_departments()
+  programs_list = get_programs()
+
+  with st.form("online_application_form"):
+    st.markdown("### Applicant Information Form")
+    col1, col2 = st.columns(2)
+    with col1:
+      app_name = st.text_input("Full Legal Name")
+      app_phone = st.text_input("Phone Number (+251...)")
+      app_campus = st.selectbox("Preferred Campus", CAMPUSES)
+    with col2:
+      app_dept = st.selectbox("Department of Choice", departments_list)
+      app_prog = st.selectbox("Program Level", programs_list)
+      app_mod = st.selectbox("Modality", ["Regular", "Extension"])
+
+    submit_app = st.form_submit_button("Submit Official Application")
+    if submit_app:
+      if app_name and app_phone:
+        apps_df = pd.read_csv(APPLICATIONS_FILE)
+        new_app = pd.DataFrame([{
+            "AppID": "".join(
+                random.choices(string.ascii_uppercase + string.digits, k=6)
+            ),
+            "FullName": app_name,
+            "Phone": app_phone,
+            "Campus": app_campus,
+            "Department": app_dept,
+            "ProgramLevel": app_prog,
+            "Modality": app_mod,
+            "Status": "Pending Review",
+            "DateSubmitted": pd.Timestamp.now().strftime("%Y-%m-%d"),
+        }])
+        apps_df = pd.concat([apps_df, new_app], ignore_index=True)
+        apps_df.to_csv(APPLICATIONS_FILE, index=False)
+        st.success(
+            f"Application submitted successfully, {app_name}! The Registrar"
+            " Office will review your details and contact you."
+        )
+      else:
+        st.error("Please provide your full name and phone number.")
 
 # --- ADMIN / REGISTRAR PORTAL ---
 elif role == "Admin / Registrar":
@@ -288,23 +430,24 @@ elif role == "Admin / Registrar":
 
   if st.session_state.get("role") == "Admin":
     st.title("🛡️ Admin & Registrar Control Panel")
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs([
         "Student Records",
+        "Applicants & Admissions",
         "Staff Directory",
+        "Announcements & Notices",
         "Departments & Programs",
         "Grade Approvals",
         "Financial Accounts",
         "Document Printing",
-        "System Settings & Logo",
-        "System Logs",
+        "System Settings & Logs",
     ])
 
     departments_list = get_departments()
     programs_list = get_programs()
 
-    # TAB 1: STUDENT RECORDS (CRUD / Edit / Delete / Add)
+    # TAB 1: STUDENT RECORDS (CRUD)
     with tab1:
-      st.subheader("Student Admission & Record Management (CRUD)")
+      st.subheader("Student Record Management (CRUD)")
       students_df = pd.read_csv(STUDENT_FILE)
 
       with st.expander("➕ Register New Student", expanded=False):
@@ -317,16 +460,13 @@ elif role == "Admin / Registrar":
           with col2:
             s_dept = st.selectbox("Department", departments_list)
             s_prog = st.selectbox("Program Level", programs_list)
-            s_mod = st.selectbox("Modality", ["Regular", "Extension", "Evening"])
+            s_mod = st.selectbox("Modality", ["Regular", "Extension"])
             s_pass = st.text_input("Default Password", type="password")
 
           if st.form_submit_button("Admit Student"):
             if s_id and s_name:
               if s_id in students_df["StudentID"].values:
-                st.error(
-                    "A student with this ID already exists. Please use a unique"
-                    " ID."
-                )
+                st.error("A student with this ID already exists.")
               else:
                 new_row = pd.DataFrame([{
                     "StudentID": s_id,
@@ -362,9 +502,6 @@ elif role == "Admin / Registrar":
               students_df["StudentID"] == sel_edit_student
           ].iloc[0]
           with st.form("edit_student_form"):
-            st.markdown(
-                f"**Modifying Record for:** {st_row['FullName']} ({sel_edit_student})"
-            )
             e_name = st.text_input("Full Name", value=st_row["FullName"])
             e_campus = st.selectbox(
                 "Campus",
@@ -389,8 +526,8 @@ elif role == "Admin / Registrar":
             )
             e_mod = st.selectbox(
                 "Modality",
-                ["Regular", "Extension", "Evening"],
-                index=["Regular", "Extension", "Evening"].index(
+                ["Regular", "Extension"],
+                index=["Regular", "Extension"].index(
                     st_row.get("Modality", "Regular")
                 ),
             )
@@ -426,9 +563,47 @@ elif role == "Admin / Registrar":
               st.warning("Student record deleted permanently.")
               st.rerun()
 
-    # TAB 2: STAFF DIRECTORY (CRUD / Institutional Emails)
+    # TAB 2: APPLICANTS & ADMISSIONS
     with tab2:
-      st.subheader("Staff & Faculty Directory Management (CRUD)")
+      st.subheader("Online Admission Applications Review")
+      apps_df = pd.read_csv(APPLICATIONS_FILE)
+      if apps_df.empty:
+        st.info("No online admission applications submitted yet.")
+      else:
+        st.dataframe(apps_df, use_container_width=True)
+        sel_app = st.selectbox(
+            "Select Application ID to Review / Admit", apps_df["AppID"].tolist()
+        )
+        if sel_app:
+          app_row = apps_df[apps_df["AppID"] == sel_app].iloc[0]
+          if st.button("🎓 Convert Applicant to Official Student"):
+            new_sid = f"HBC/{random.randint(100,999)}/26"
+            new_student = pd.DataFrame([{
+                "StudentID": new_sid,
+                "FullName": app_row["FullName"],
+                "Campus": app_row["Campus"],
+                "Department": app_row["Department"],
+                "ProgramLevel": app_row["ProgramLevel"],
+                "Modality": app_row["Modality"],
+                "Year": "1",
+                "Password": "password123",
+                "Photo": "",
+            }])
+            students_df = pd.read_csv(STUDENT_FILE)
+            students_df = pd.concat([students_df, new_student], ignore_index=True)
+            students_df.to_csv(STUDENT_FILE, index=False)
+
+            apps_df.loc[apps_df["AppID"] == sel_app, "Status"] = "Admitted"
+            apps_df.to_csv(APPLICATIONS_FILE, index=False)
+            st.success(
+                f"Applicant {app_row['FullName']} successfully admitted with"
+                f" ID: {new_sid}!"
+            )
+            st.rerun()
+
+    # TAB 3: STAFF DIRECTORY
+    with tab3:
+      st.subheader("Staff & Faculty Directory Management")
       staff_df = pd.read_csv(STAFF_FILE)
       if "InstitutionalEmail" not in staff_df.columns:
         staff_df["InstitutionalEmail"] = ""
@@ -442,9 +617,7 @@ elif role == "Admin / Registrar":
           st_dept = st.selectbox(
               "Department / Unit", departments_list + ["General"]
           )
-          st_email = st.text_input(
-              "Institutional Email (e.g., name@hanekcollege.edu.et)"
-          )
+          st_email = st.text_input("Institutional Email")
           st_pass = st.text_input("Password", type="password")
 
           if st.form_submit_button("Save Staff Member"):
@@ -472,16 +645,12 @@ elif role == "Admin / Registrar":
         st.info("No staff records found.")
       else:
         st.dataframe(staff_df, use_container_width=True)
-
         sel_edit_staff = st.selectbox(
             "Select Staff ID to Edit or Delete", staff_df["StaffID"].tolist()
         )
         if sel_edit_staff:
           s_row = staff_df[staff_df["StaffID"] == sel_edit_staff].iloc[0]
           with st.form("edit_staff_form"):
-            st.markdown(
-                f"**Modifying Staff:** {s_row['FullName']} ({sel_edit_staff})"
-            )
             es_name = st.text_input("Full Name", value=s_row["FullName"])
             es_role = st.selectbox(
                 "Role",
@@ -538,10 +707,56 @@ elif role == "Admin / Registrar":
               st.warning("Staff record deleted permanently.")
               st.rerun()
 
-    # TAB 3: DEPARTMENTS & PROGRAMS (Add, Rename, Delete)
-    with tab3:
-      st.subheader("Manage Academic Departments & Programs")
+    # TAB 4: ANNOUNCEMENTS & NOTICES
+    with tab4:
+      st.subheader("Manage Public Announcements & Notices")
+      ann_df = pd.read_csv(ANNOUNCE_FILE)
+      st.dataframe(ann_df, use_container_width=True)
 
+      with st.form("add_announcement_form"):
+        st.markdown("### Post New Institutional Notice")
+        a_title = st.text_input("Notice Title")
+        a_cat = st.selectbox(
+            "Category",
+            [
+                "General Notice",
+                "Exam Schedule",
+                "Registration Deadline",
+                "Graduation",
+            ],
+        )
+        a_content = st.text_area("Notice Content")
+
+        if st.form_submit_button("Publish Announcement"):
+          if a_title and a_content:
+            new_ann = pd.DataFrame([{
+                "NoticeID": "".join(
+                    random.choices(string.ascii_uppercase + string.digits, k=5)
+                ),
+                "Title": a_title,
+                "Date": pd.Timestamp.now().strftime("%Y-%m-%d"),
+                "Category": a_cat,
+                "Content": a_content,
+            }])
+            ann_df = pd.concat([ann_df, new_ann], ignore_index=True)
+            ann_df.to_csv(ANNOUNCE_FILE, index=False)
+            st.success("Announcement published successfully!")
+            st.rerun()
+
+      if not ann_df.empty:
+        with st.form("delete_ann_form"):
+          del_notice = st.selectbox(
+              "Select Notice to Delete", ann_df["Title"].tolist()
+          )
+          if st.form_submit_button("Delete Notice"):
+            ann_df = ann_df[ann_df["Title"] != del_notice]
+            ann_df.to_csv(ANNOUNCE_FILE, index=False)
+            st.warning("Notice deleted.")
+            st.rerun()
+
+    # TAB 5: DEPARTMENTS & PROGRAMS
+    with tab5:
+      st.subheader("Manage Academic Departments & Programs")
       col_dept, col_prog = st.columns(2)
 
       with col_dept:
@@ -602,8 +817,8 @@ elif role == "Admin / Registrar":
             else:
               st.error("You must retain at least one program.")
 
-    # TAB 4: GRADE APPROVALS
-    with tab4:
+    # TAB 6: GRADE APPROVALS
+    with tab6:
       st.subheader("Pending Grade Approvals & Moderation")
       pending_df = pd.read_csv(PENDING_FILE)
       if pending_df.empty:
@@ -644,8 +859,8 @@ elif role == "Admin / Registrar":
           st.warning("Pending grade submission rejected and deleted.")
           st.rerun()
 
-    # TAB 5: FINANCIAL ACCOUNTS (ETB)
-    with tab5:
+    # TAB 7: FINANCIAL ACCOUNTS (ETB)
+    with tab7:
       st.subheader("Student Financial Accounts & Clearance (ETB)")
       fin_df = pd.read_csv(FINANCE_FILE)
       students_df = pd.read_csv(STUDENT_FILE)
@@ -687,8 +902,8 @@ elif role == "Admin / Registrar":
             st.success("Financial records updated successfully!")
             st.rerun()
 
-    # TAB 6: DOCUMENT PRINTING
-    with tab6:
+    # TAB 8: DOCUMENT PRINTING
+    with tab8:
       st.subheader(
           "Smart Landscape Academic Document Generation (Admin Office)"
       )
@@ -924,40 +1139,9 @@ elif role == "Admin / Registrar":
               " this multi-level compact layout perfectly on a single sheet!"
           )
 
-    # TAB 7: SYSTEM SETTINGS & LOGO
-    with tab7:
-      st.subheader("System Settings & College Logo Upload")
-      st.markdown(
-          "### Upload College Logo\nUpload your college badge/logo image"
-          " (`logo.png`) directly here so it appears across the sidebar and"
-          " portal headers."
-      )
-
-      uploaded_logo = st.file_uploader(
-          "Choose logo image (PNG / JPG)", type=["png", "jpg", "jpeg"]
-      )
-      if uploaded_logo is not None:
-        with open(LOGO_FILE, "wb") as f:
-          f.write(uploaded_logo.getbuffer())
-        st.success(
-            "Logo uploaded successfully! Please refresh or reload the page to"
-            " view it."
-        )
-
-      st.markdown("---")
-      st.markdown("### Update Admin Credentials")
-      with st.form("change_admin"):
-        new_adm_user = st.text_input("New Admin Username")
-        new_adm_pass = st.text_input("New Admin Password", type="password")
-        if st.form_submit_button("Update Credentials"):
-          pd.DataFrame(
-              [{"Username": new_adm_user, "Password": new_adm_pass}]
-          ).to_csv(ADMIN_FILE, index=False)
-          st.success("Admin credentials updated successfully!")
-
-    # TAB 8: SYSTEM LOGS
-    with tab8:
-      st.subheader("System Logs & Database Health")
+    # TAB 9: SYSTEM SETTINGS & LOGS
+    with tab9:
+      st.subheader("System Settings & Database Health")
       st.write(
           f"Total Registered Students: {len(pd.read_csv(STUDENT_FILE))}"
       )
@@ -967,16 +1151,46 @@ elif role == "Admin / Registrar":
           f" {len(pd.read_csv(PENDING_FILE))}"
       )
       st.write(f"Official Posted Grades: {len(pd.read_csv(GRADES_FILE))}")
-      st.write(f"Active Departments: {len(departments_list)}")
-      st.write(f"Configured Programs: {len(programs_list)}")
+      st.write(f"Total Applications: {len(pd.read_csv(APPLICATIONS_FILE))}")
+
+      st.markdown("---")
+      st.markdown("### Upload College Logo")
+      uploaded_logo = st.file_uploader(
+          "Choose logo image (PNG / JPG)", type=["png", "jpg", "jpeg"]
+      )
+      if uploaded_logo is not None:
+        with open(LOGO_FILE, "wb") as f:
+          f.write(uploaded_logo.getbuffer())
+        st.success("Logo uploaded successfully!")
 
 # --- STAFF / INSTRUCTOR PORTAL ---
 elif role == "Staff / Instructor":
-  st.sidebar.subheader("Staff Portal Login")
-  st_id_in = st.sidebar.text_input("Staff ID")
-  st_pass_in = st.sidebar.text_input("Password", type="password")
+  st.markdown("<br>", unsafe_allow_html=True)
+  st.markdown(
+      """
+        <div class="univ-card">
+            <div class="univ-header">
+    """,
+      unsafe_allow_html=True,
+  )
 
-  if st.sidebar.button("Staff Login"):
+  if os.path.exists(LOGO_FILE):
+    st.image(LOGO_FILE, width=90)
+
+  st.markdown(
+      """
+                <h3>Hanek Technology & Business College</h3>
+                <p>Staff & Faculty Portal Authentication</p>
+            </div>
+            <div class="portal-banner">FACULTY & INSTRUCTOR LOGIN</div>
+    """,
+      unsafe_allow_html=True,
+  )
+
+  st_id_in = st.text_input("Staff ID")
+  st_pass_in = st.text_input("Password", type="password")
+
+  if st.button("Staff Login", use_container_width=True):
     staff_df = pd.read_csv(STAFF_FILE)
     match = staff_df[
         (staff_df["StaffID"] == st_id_in)
@@ -993,9 +1207,12 @@ elif role == "Staff / Instructor":
       st.success(f"Welcome, {match.iloc[0]['Role']} {match.iloc[0]['FullName']}")
       st.rerun()
     else:
-      st.sidebar.error("Invalid Staff Credentials")
+      st.error("Invalid Staff Credentials")
+
+  st.markdown("</div>", unsafe_allow_html=True)
 
   if "staff_logged" in st.session_state:
+    st.markdown("---")
     st.title(
         f"👨‍🏫 Staff Portal: {st.session_state['staff_name']} ("
         f"{st.session_state['staff_role']})"
@@ -1004,14 +1221,7 @@ elif role == "Staff / Instructor":
         f"📧 **Institutional Email:**"
         f" {st.session_state.get('staff_email', 'Not Assigned')}"
     )
-    st.markdown(
-        "### Submit Module Grades (Manual Entry by Instructor)"
-    )
-    st.info(
-        "ℹ️ Instructors can select the TVET Level, input course module codes,"
-        " titles, credit hours, and numerical scores (0-100) for review and"
-        " approval."
-    )
+    st.markdown("### Submit Module Grades (Manual Entry by Instructor)")
 
     students_df = pd.read_csv(STUDENT_FILE)
     if students_df.empty:
@@ -1080,11 +1290,32 @@ elif role == "Staff / Instructor":
 
 # --- STUDENT PORTAL ---
 elif role == "Student":
-  st.sidebar.subheader("Student Portal Login")
-  sid_in = st.sidebar.text_input("Student ID")
-  spass_in = st.sidebar.text_input("Password", type="password")
+  st.markdown("<br>", unsafe_allow_html=True)
+  st.markdown(
+      """
+        <div class="univ-card">
+            <div class="univ-header">
+    """,
+      unsafe_allow_html=True,
+  )
 
-  if st.sidebar.button("Student Login"):
+  if os.path.exists(LOGO_FILE):
+    st.image(LOGO_FILE, width=90)
+
+  st.markdown(
+      """
+                <h3>Hanek Technology & Business College</h3>
+                <p>Student Information System Portal</p>
+            </div>
+            <div class="portal-banner">STUDENT PORTAL LOGIN</div>
+    """,
+      unsafe_allow_html=True,
+  )
+
+  sid_in = st.text_input("Student ID")
+  spass_in = st.text_input("Password", type="password")
+
+  if st.button("Student Login", use_container_width=True):
     stud_df = pd.read_csv(STUDENT_FILE)
     match = stud_df[
         (stud_df["StudentID"] == sid_in) & (stud_df["Password"] == spass_in)
@@ -1094,9 +1325,12 @@ elif role == "Student":
       st.success("Logged in successfully!")
       st.rerun()
     else:
-      st.sidebar.error("Invalid Student ID or Password")
+      st.error("Invalid Student ID or Password")
+
+  st.markdown("</div>", unsafe_allow_html=True)
 
   if "student_logged" in st.session_state:
+    st.markdown("---")
     current_sid = st.session_state["student_logged"]
     stud_df = pd.read_csv(STUDENT_FILE)
     student_info = stud_df[stud_df["StudentID"] == current_sid].iloc[0]
