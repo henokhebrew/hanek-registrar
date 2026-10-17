@@ -1,34 +1,60 @@
-import base64
+# Hanek Technology and Business College
+# Integrated Multi-Campus Student Information and Registrar System
+# Streamlit application — single-file implementation
+#
+# IMPORTANT:
+# 1. Install the packages listed in requirements.txt.
+# 2. Configure a persistent database and secure secrets before production use.
+# 3. This application is a foundation, not a guarantee of compliance with every
+#    university's regulations or Ethiopian higher-education requirements.
+# 4. Back up existing CSV files before migrating existing records.
+
 import os
-import random
-import string
+import re
+import hmac
+import html
+import json
+import secrets
+import hashlib
+import sqlite3
+import logging
+from pathlib import Path
+from datetime import datetime, date
+from contextlib import contextmanager
+
 import pandas as pd
 import streamlit as st
 
-# --- PAGE CONFIGURATION ---
+# ============================================================
+# 1. APPLICATION CONFIGURATION
+# ============================================================
+
 st.set_page_config(
-    page_title="Hanek Technology and Business College - Registrar SIS",
+    page_title="Hanek Technology and Business College | Academic Portal",
     page_icon="🎓",
     layout="wide",
+    initial_sidebar_state="expanded",
 )
 
-# --- DIRECTORY & CSV FILE PATHS ---
-PHOTO_DIR = "student_photos"
-os.makedirs(PHOTO_DIR, exist_ok=True)
+APP_NAME = "Hanek Technology and Business College"
+APP_SHORT = "HANEK COLLEGE"
+APP_VERSION = "2.0.0"
+CURRENT_YEAR = date.today().year
 
-STUDENT_FILE = "students.csv"
-GRADES_FILE = "grades.csv"
-PENDING_FILE = "pending_grades.csv"
-STAFF_FILE = "staff.csv"
-ADMIN_FILE = "admin.csv"
-FINANCE_FILE = "finances.csv"
-DEPT_FILE = "departments.csv"
-PROG_FILE = "programs.csv"
-ANNOUNCE_FILE = "announcements.csv"
-APPLICATIONS_FILE = "applications.csv"
-LOGO_FILE = "logo.png"
+DATA_DIR = Path(os.getenv("HANEK_DATA_DIR", "hanek_data"))
+UPLOAD_DIR = DATA_DIR / "student_photos"
+DATABASE_PATH = DATA_DIR / "hanek_registrar.db"
+LOG_PATH = DATA_DIR / "audit.log"
 
-CAMPUSES = ["Wolaita Sodo", "Basketo Laska", "Boloso Bombe", "Jinka"]
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
+CAMPUSES = [
+    "Wolaita Sodo",
+    "Basketo Laska",
+    "Boloso Bombe",
+    "Jinka",
+]
 
 DEFAULT_DEPARTMENTS = [
     "Cooperative Accounting and Auditing",
@@ -45,1013 +71,2344 @@ DEFAULT_PROGRAMS = [
     "TVET Level III",
     "TVET Level IV",
     "Degree Program",
-    "Regular",
-    "Extension",
 ]
 
+MODALITIES = ["Regular", "Extension", "Distance Learning", "Online"]
+SEMESTERS = ["Semester I", "Semester II", "Summer"]
+APPLICATION_STATUSES = [
+    "Pending Review",
+    "Under Review",
+    "Admitted",
+    "Rejected",
+    "Waitlisted",
+]
+NOTICE_CATEGORIES = [
+    "General Notice",
+    "Academic Calendar",
+    "Examination",
+    "Registration Deadline",
+    "Scholarship",
+    "Graduation",
+]
 STAFF_ROLES = [
     "College President",
     "Vice President for Academic Affairs",
-    "Cross-Campus Institutional Coach / QA Director",
+    "Quality Assurance Director",
     "College Dean",
     "Vice Dean",
     "Department Head",
     "Head Registrar",
     "Assistant Registrar",
-    "Registrar Officer / Credential Specialist",
-    "Senior Secretary",
-    "Human Resources Officer",
-    "Finance & Procurement Officer",
-    "IT / Systems Administrator",
-    "Head of Facility Services",
-    "Campus Security Guard",
-    "Custodial / Maintenance Personnel",
+    "Registrar Officer",
+    "Admissions Officer",
+    "Examination Officer",
     "Instructor / Lecturer",
+    "Department Finance Officer",
+    "Finance Officer",
+    "Human Resources Officer",
+    "IT / Systems Administrator",
+    "Library Officer",
 ]
 
+# Password hashing uses PBKDF2. Do not store raw passwords.
+PBKDF2_ITERATIONS = 310_000
+MAX_UPLOAD_MB = 5
 
-# --- INITIALIZE CSV STORAGE ---
-def init_csvs():
-  if not os.path.exists(STUDENT_FILE):
-    pd.DataFrame(
-        columns=[
-            "StudentID",
-            "FullName",
-            "Campus",
-            "Department",
-            "ProgramLevel",
-            "Modality",
-            "Year",
-            "Password",
-            "Photo",
-            "PhotoStatus",
-        ]
-    ).to_csv(STUDENT_FILE, index=False)
-  else:
-    df = pd.read_csv(STUDENT_FILE)
-    if "PhotoStatus" not in df.columns:
-      df["PhotoStatus"] = "Not Uploaded"
-      df.to_csv(STUDENT_FILE, index=False)
-    if "Photo" not in df.columns:
-      df["Photo"] = ""
-      df.to_csv(STUDENT_FILE, index=False)
+# ============================================================
+# 2. LOGGING AND SESSION STATE
+# ============================================================
 
-  if not os.path.exists(GRADES_FILE):
-    pd.DataFrame(
-        columns=[
-            "StudentID",
-            "FullName",
-            "CourseCode",
-            "CourseName",
-            "CreditHour",
-            "Score",
-            "Grade",
-            "Level",
-            "Semester",
-            "AcademicYear",
-        ]
-    ).to_csv(GRADES_FILE, index=False)
+logging.basicConfig(
+    filename=str(LOG_PATH),
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(message)s",
+)
 
-  if not os.path.exists(PENDING_FILE):
-    pd.DataFrame(
-        columns=[
-            "PendingID",
-            "StudentID",
-            "FullName",
-            "CourseCode",
-            "CourseName",
-            "CreditHour",
-            "Score",
-            "Grade",
-            "Level",
-            "Semester",
-            "Instructor",
-        ]
-    ).to_csv(PENDING_FILE, index=False)
+for key, value in {
+    "authenticated": False,
+    "username": "",
+    "display_name": "",
+    "role": "",
+    "campus": "",
+    "department": "",
+    "login_attempts": 0,
+    "login_locked_until": 0,
+}.items():
+    if key not in st.session_state:
+        st.session_state[key] = value
 
-  if not os.path.exists(STAFF_FILE):
-    pd.DataFrame(
-        columns=[
-            "StaffID",
-            "FullName",
-            "Role",
-            "Campus",
-            "Department",
-            "InstitutionalEmail",
-            "Password",
-        ]
-    ).to_csv(STAFF_FILE, index=False)
 
-  if not os.path.exists(ADMIN_FILE):
-    pd.DataFrame([{"Username": "admin", "Password": "password123"}]).to_csv(
-        ADMIN_FILE, index=False
+def audit(action, detail=""):
+    """Record an auditable application event without logging passwords."""
+    username = str(st.session_state.get("username", "anonymous"))
+    logging.info(
+        "user=%s action=%s detail=%s",
+        username,
+        action,
+        str(detail).replace("\n", " ")[:500],
     )
 
-  if not os.path.exists(FINANCE_FILE):
-    pd.DataFrame(
-        columns=[
-            "StudentID",
-            "TotalFeeETB",
-            "PaidETB",
-            "Status",
-            "LastUpdated",
-        ]
-    ).to_csv(FINANCE_FILE, index=False)
 
-  if not os.path.exists(DEPT_FILE):
-    pd.DataFrame({"Department": DEFAULT_DEPARTMENTS}).to_csv(
-        DEPT_FILE, index=False
+def hash_password(password):
+    salt = secrets.token_bytes(16)
+    digest = hashlib.pbkdf2_hmac(
+        "sha256",
+        password.encode("utf-8"),
+        salt,
+        PBKDF2_ITERATIONS,
+    )
+    return (
+        f"pbkdf2_sha256${PBKDF2_ITERATIONS}$"
+        f"{salt.hex()}${digest.hex()}"
     )
 
-  if not os.path.exists(PROG_FILE):
-    pd.DataFrame({"Program": DEFAULT_PROGRAMS}).to_csv(PROG_FILE, index=False)
 
-  if not os.path.exists(ANNOUNCE_FILE):
-    pd.DataFrame(
-        columns=["NoticeID", "Title", "Date", "Category", "Content"]
-    ).to_csv(ANNOUNCE_FILE, index=False)
+def verify_password(password, stored):
+    """Verify a hashed password; support legacy plaintext only for migration."""
+    if not isinstance(stored, str) or not stored:
+        return False
 
-  if not os.path.exists(APPLICATIONS_FILE):
-    pd.DataFrame(
-        columns=[
-            "AppID",
-            "FullName",
-            "Phone",
-            "Campus",
-            "Department",
-            "ProgramLevel",
-            "Modality",
-            "Status",
-            "DateSubmitted",
-        ]
-    ).to_csv(APPLICATIONS_FILE, index=False)
+    if not stored.startswith("pbkdf2_sha256$"):
+        # Legacy credentials are accepted only to permit a controlled upgrade.
+        return hmac.compare_digest(password, stored)
 
-
-init_csvs()
+    try:
+        _, iterations, salt_hex, digest_hex = stored.split("$", 3)
+        calculated = hashlib.pbkdf2_hmac(
+            "sha256",
+            password.encode("utf-8"),
+            bytes.fromhex(salt_hex),
+            int(iterations),
+        )
+        return hmac.compare_digest(calculated.hex(), digest_hex)
+    except (ValueError, TypeError):
+        return False
 
 
-# --- HELPER FUNCTIONS ---
-def get_departments():
-  if os.path.exists(DEPT_FILE):
-    df = pd.read_csv(DEPT_FILE)
-    if "Department" in df.columns:
-      return df["Department"].dropna().tolist()
-  return DEFAULT_DEPARTMENTS
+def safe_text(value):
+    if value is None:
+        return ""
+    return html.escape(str(value))
 
 
-def get_programs():
-  if os.path.exists(PROG_FILE):
-    df = pd.read_csv(PROG_FILE)
-    if "Program" in df.columns:
-      return df["Program"].dropna().tolist()
-  return DEFAULT_PROGRAMS
+def valid_email(value):
+    return bool(
+        re.fullmatch(
+            r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}",
+            value.strip(),
+        )
+    )
 
 
-def generate_auth_code():
-  letters = random.choices(string.ascii_uppercase, k=3)
-  digits = random.choices(string.digits, k=5)
-  return f"HBC-AUTH-{''.join(letters)}-{''.join(digits)}"
+def make_id(prefix):
+    return f"{prefix}-{secrets.token_hex(5).upper()}"
+
+
+def now_string():
+    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+
+def academic_year():
+    today = date.today()
+    if today.month >= 9:
+        return f"{today.year}/{today.year + 1}"
+    return f"{today.year - 1}/{today.year}"
 
 
 def calculate_grade(score):
-  if score >= 90:
-    return "A+", 4.0, 12.0
-  elif score >= 85:
-    return "A", 4.0, 12.0
-  elif score >= 80:
-    return "A-", 3.75, 11.25
-  elif score >= 75:
-    return "B+", 3.25, 9.75
-  elif score >= 70:
-    return "B", 3.0, 9.0
-  elif score >= 65:
-    return "B-", 2.75, 8.25
-  elif score >= 60:
-    return "C+", 2.5, 7.5
-  elif score >= 50:
-    return "C", 2.0, 6.0
-  elif score >= 40:
-    return "D", 1.0, 3.0
-  else:
-    return "F", 0.0, 0.0
+    score = float(score)
+    if not 0 <= score <= 100:
+        raise ValueError("The score must be between 0 and 100.")
+
+    if score >= 90:
+        return "A+", 4.0
+    if score >= 85:
+        return "A", 4.0
+    if score >= 80:
+        return "A-", 3.75
+    if score >= 75:
+        return "B+", 3.5
+    if score >= 70:
+        return "B", 3.0
+    if score >= 65:
+        return "B-", 2.75
+    if score >= 60:
+        return "C+", 2.5
+    if score >= 50:
+        return "C", 2.0
+    if score >= 40:
+        return "D", 1.0
+    return "F", 0.0
 
 
-# --- UI STYLING & PRINT OPTIMIZATION ---
+# ============================================================
+# 3. DATABASE
+# ============================================================
+
+@contextmanager
+def db_connection():
+    conn = sqlite3.connect(str(DATABASE_PATH), timeout=30)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON")
+    try:
+        yield conn
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def init_database():
+    with db_connection() as conn:
+        conn.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS users (
+                username TEXT PRIMARY KEY,
+                password_hash TEXT NOT NULL,
+                full_name TEXT NOT NULL,
+                role TEXT NOT NULL,
+                campus TEXT NOT NULL DEFAULT 'All Campuses',
+                department TEXT NOT NULL DEFAULT '',
+                email TEXT NOT NULL DEFAULT '',
+                active INTEGER NOT NULL DEFAULT 1,
+                must_change_password INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS students (
+                student_id TEXT PRIMARY KEY,
+                full_name TEXT NOT NULL,
+                sex TEXT NOT NULL DEFAULT '',
+                date_of_birth TEXT NOT NULL DEFAULT '',
+                phone TEXT NOT NULL DEFAULT '',
+                email TEXT NOT NULL DEFAULT '',
+                address TEXT NOT NULL DEFAULT '',
+                campus TEXT NOT NULL,
+                department TEXT NOT NULL,
+                program TEXT NOT NULL,
+                modality TEXT NOT NULL,
+                admission_year INTEGER NOT NULL,
+                study_year INTEGER NOT NULL DEFAULT 1,
+                semester TEXT NOT NULL DEFAULT 'Semester I',
+                status TEXT NOT NULL DEFAULT 'Active',
+                photo_path TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS applications (
+                application_id TEXT PRIMARY KEY,
+                full_name TEXT NOT NULL,
+                phone TEXT NOT NULL,
+                email TEXT NOT NULL DEFAULT '',
+                campus TEXT NOT NULL,
+                department TEXT NOT NULL,
+                program TEXT NOT NULL,
+                modality TEXT NOT NULL,
+                qualification TEXT NOT NULL DEFAULT '',
+                status TEXT NOT NULL DEFAULT 'Pending Review',
+                submitted_at TEXT NOT NULL,
+                reviewed_by TEXT NOT NULL DEFAULT '',
+                review_note TEXT NOT NULL DEFAULT '',
+                student_id TEXT NOT NULL DEFAULT ''
+            );
+
+            CREATE TABLE IF NOT EXISTS courses (
+                course_code TEXT PRIMARY KEY,
+                course_name TEXT NOT NULL,
+                department TEXT NOT NULL,
+                program TEXT NOT NULL,
+                level TEXT NOT NULL,
+                credit_hours REAL NOT NULL,
+                active INTEGER NOT NULL DEFAULT 1
+            );
+
+            CREATE TABLE IF NOT EXISTS enrollments (
+                enrollment_id TEXT PRIMARY KEY,
+                student_id TEXT NOT NULL,
+                course_code TEXT NOT NULL,
+                academic_year TEXT NOT NULL,
+                semester TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                UNIQUE(student_id, course_code, academic_year, semester),
+                FOREIGN KEY(student_id) REFERENCES students(student_id),
+                FOREIGN KEY(course_code) REFERENCES courses(course_code)
+            );
+
+            CREATE TABLE IF NOT EXISTS grades (
+                grade_id TEXT PRIMARY KEY,
+                student_id TEXT NOT NULL,
+                course_code TEXT NOT NULL,
+                course_name TEXT NOT NULL,
+                credit_hours REAL NOT NULL,
+                score REAL NOT NULL,
+                letter_grade TEXT NOT NULL,
+                grade_point REAL NOT NULL,
+                academic_year TEXT NOT NULL,
+                semester TEXT NOT NULL,
+                instructor TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'Pending',
+                submitted_at TEXT NOT NULL,
+                approved_by TEXT NOT NULL DEFAULT '',
+                approved_at TEXT NOT NULL DEFAULT '',
+                FOREIGN KEY(student_id) REFERENCES students(student_id)
+            );
+
+            CREATE TABLE IF NOT EXISTS finance (
+                finance_id TEXT PRIMARY KEY,
+                student_id TEXT NOT NULL UNIQUE,
+                total_fee REAL NOT NULL DEFAULT 0,
+                amount_paid REAL NOT NULL DEFAULT 0,
+                last_updated TEXT NOT NULL,
+                notes TEXT NOT NULL DEFAULT '',
+                FOREIGN KEY(student_id) REFERENCES students(student_id)
+            );
+
+            CREATE TABLE IF NOT EXISTS payments (
+                payment_id TEXT PRIMARY KEY,
+                student_id TEXT NOT NULL,
+                amount REAL NOT NULL,
+                payment_method TEXT NOT NULL,
+                receipt_number TEXT NOT NULL UNIQUE,
+                received_by TEXT NOT NULL,
+                payment_date TEXT NOT NULL,
+                notes TEXT NOT NULL DEFAULT '',
+                FOREIGN KEY(student_id) REFERENCES students(student_id)
+            );
+
+            CREATE TABLE IF NOT EXISTS announcements (
+                notice_id TEXT PRIMARY KEY,
+                title TEXT NOT NULL,
+                category TEXT NOT NULL,
+                content TEXT NOT NULL,
+                published INTEGER NOT NULL DEFAULT 1,
+                created_by TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS credentials (
+                credential_id TEXT PRIMARY KEY,
+                student_id TEXT NOT NULL,
+                document_type TEXT NOT NULL,
+                verification_code TEXT NOT NULL UNIQUE,
+                issued_by TEXT NOT NULL,
+                issued_at TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'Issued',
+                FOREIGN KEY(student_id) REFERENCES students(student_id)
+            );
+
+            CREATE TABLE IF NOT EXISTS audit_events (
+                event_id TEXT PRIMARY KEY,
+                username TEXT NOT NULL,
+                action TEXT NOT NULL,
+                details TEXT NOT NULL,
+                event_time TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS settings (
+                setting_key TEXT PRIMARY KEY,
+                setting_value TEXT NOT NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_students_campus
+                ON students(campus);
+            CREATE INDEX IF NOT EXISTS idx_students_department
+                ON students(department);
+            CREATE INDEX IF NOT EXISTS idx_grades_student
+                ON grades(student_id);
+            CREATE INDEX IF NOT EXISTS idx_applications_status
+                ON applications(status);
+            """
+        )
+
+        # Initial bootstrap account. Change the password immediately.
+        admin = conn.execute(
+            "SELECT username FROM users WHERE username = ?",
+            ("admin",),
+        ).fetchone()
+
+        if not admin:
+            bootstrap_password = os.getenv("HANEK_BOOTSTRAP_PASSWORD", "")
+            if not bootstrap_password:
+                bootstrap_password = secrets.token_urlsafe(18)
+                logging.warning(
+                    "A one-time administrator bootstrap password was "
+                    "generated. Configure HANEK_BOOTSTRAP_PASSWORD "
+                    "as a deployment secret to set a known password."
+                )
+
+            conn.execute(
+                """
+                INSERT INTO users (
+                    username, password_hash, full_name, role,
+                    campus, department, email, active,
+                    must_change_password, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, 1, 1, ?)
+                """,
+                (
+                    "admin",
+                    hash_password(bootstrap_password),
+                    "System Administrator",
+                    "System Administrator",
+                    "All Campuses",
+                    "Office of the Registrar",
+                    "",
+                    now_string(),
+                ),
+            )
+
+            # Do not display or write bootstrap passwords into application
+            # pages or ordinary logs. Set the environment secret securely.
+            st.session_state["_bootstrap_created"] = True
+
+        for key, value in {
+            "institution_name": APP_NAME,
+            "institution_address": "Wolaita Sodo, Ethiopia",
+            "po_box": "23",
+            "telephone": "+251-46-180-3164",
+            "email": "",
+            "website": "",
+        }.items():
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO settings(setting_key, setting_value)
+                VALUES (?, ?)
+                """,
+                (key, value),
+            )
+
+
+init_database()
+
+
+def log_event(action, details=""):
+    username = str(st.session_state.get("username", "anonymous"))
+    with db_connection() as conn:
+        conn.execute(
+            """
+            INSERT INTO audit_events
+                (event_id, username, action, details, event_time)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                make_id("AUD"),
+                username,
+                action,
+                str(details)[:500],
+                now_string(),
+            ),
+        )
+    audit(action, details)
+
+
+def query_df(sql, params=()):
+    with db_connection() as conn:
+        return pd.read_sql_query(sql, conn, params=params)
+
+
+def query_one(sql, params=()):
+    with db_connection() as conn:
+        return conn.execute(sql, params).fetchone()
+
+
+def execute(sql, params=()):
+    with db_connection() as conn:
+        conn.execute(sql, params)
+
+
+def get_setting(key, default=""):
+    row = query_one(
+        "SELECT setting_value FROM settings WHERE setting_key = ?",
+        (key,),
+    )
+    return row["setting_value"] if row else default
+
+
+def set_setting(key, value):
+    execute(
+        """
+        INSERT INTO settings(setting_key, setting_value)
+        VALUES (?, ?)
+        ON CONFLICT(setting_key)
+        DO UPDATE SET setting_value = excluded.setting_value
+        """,
+        (key, str(value)),
+    )
+
+
+def get_departments():
+    defaults = DEFAULT_DEPARTMENTS
+    row = query_one(
+        "SELECT setting_value FROM settings WHERE setting_key = ?",
+        ("departments",),
+    )
+    if row:
+        try:
+            values = json.loads(row["setting_value"])
+            if isinstance(values, list) and values:
+                return values
+        except (json.JSONDecodeError, TypeError):
+            pass
+    return defaults
+
+
+def get_programs():
+    row = query_one(
+        "SELECT setting_value FROM settings WHERE setting_key = ?",
+        ("programs",),
+    )
+    if row:
+        try:
+            values = json.loads(row["setting_value"])
+            if isinstance(values, list) and values:
+                return values
+        except (json.JSONDecodeError, TypeError):
+            pass
+    return DEFAULT_PROGRAMS
+
+
+# ============================================================
+# 4. PRESENTATION AND ACCESS CONTROL
+# ============================================================
+
 st.markdown(
     """
     <style>
-        .main { background-color: #f1f5f9; }
-        h1, h2, h3 { color: #0f172a; font-family: sans-serif; font-weight: 800; }
-        .univ-card {
-            background: #ffffff;
-            border: 1px solid #cbd5e1;
-            border-top: 5px solid #1e3a8a;
-            border-radius: 12px;
-            padding: 30px;
-            box-shadow: 0 10px 15px -3px rgba(30, 58, 138, 0.1);
-            max-width: 500px;
-            margin: 0 auto;
-            color: #1e293b;
+    :root { color-scheme: light; }
+    .stApp {
+        background: linear-gradient(180deg, #f5f8fc 0%, #edf3fa 100%);
+        color: #17243b;
+    }
+    h1, h2, h3 {
+        color: #102c55 !important;
+        letter-spacing: -0.3px;
+    }
+    [data-testid="stSidebar"] {
+        background: #102c55;
+    }
+    [data-testid="stSidebar"] * {
+        color: #ffffff;
+    }
+    [data-testid="stSidebar"] [data-baseweb="select"] * {
+        color: #17243b;
+    }
+    div[data-testid="stMetric"] {
+        background: white;
+        border: 1px solid #dce5f0;
+        padding: 16px;
+        border-radius: 14px;
+        box-shadow: 0 4px 12px rgba(16,44,85,.05);
+    }
+    div.stButton > button, div.stFormSubmitButton > button {
+        border-radius: 9px;
+        font-weight: 650;
+        min-height: 42px;
+    }
+    div[data-testid="stForm"] {
+        background: rgba(255,255,255,.88);
+        border: 1px solid #dce5f0;
+        border-radius: 14px;
+        padding: 18px;
+    }
+    .hero {
+        padding: 28px;
+        border-radius: 18px;
+        background: linear-gradient(115deg, #102c55, #1d5da8);
+        color: white;
+        margin-bottom: 18px;
+        box-shadow: 0 12px 30px rgba(16,44,85,.15);
+    }
+    .hero h1, .hero h2, .hero p { color: white !important; }
+    .small-muted { color: #64748b; font-size: .88rem; }
+    .notice {
+        background: white;
+        padding: 18px;
+        margin: 10px 0;
+        border-radius: 12px;
+        border-left: 5px solid #1d5da8;
+        box-shadow: 0 4px 12px rgba(16,44,85,.04);
+    }
+    @media print {
+        [data-testid="stSidebar"], header, footer,
+        .stButton, .stFormSubmitButton {
+            display: none !important;
         }
-        .portal-banner {
-            background: linear-gradient(90deg, #1e3a8a 0%, #3b82f6 100%);
-            color: white;
-            padding: 12px 20px;
-            border-radius: 8px;
-            text-align: center;
-            font-weight: 800;
-            margin-bottom: 20px;
-        }
-        .notice-card {
-            background: #ffffff;
-            border-left: 6px solid #1e3a8a;
-            border: 1px solid #e2e8f0;
-            padding: 18px 22px;
-            margin-bottom: 15px;
-            border-radius: 8px;
-        }
-        .contact-box {
-            background: #ffffff;
-            border: 1px solid #cbd5e1;
-            border-radius: 8px;
-            padding: 20px;
-            margin-top: 20px;
-        }
-        @media print {
-            body { -webkit-print-color-adjust: exact; }
-            .stSidebar, .stButton, header { display: none !important; }
-            .single-page-doc { page-break-inside: avoid; max-height: 100vh; overflow: hidden; }
-        }
+        .stApp { background: white !important; }
+    }
     </style>
-""",
-    unsafe_allow_html=True,
-)
-
-# --- SIDEBAR NAVIGATION ---
-st.sidebar.markdown(
-    "<h2 style='text-align: center; color: #1e3a8a;'>Hanek College</h2>",
-    unsafe_allow_html=True,
-)
-st.sidebar.markdown(
-    "<p style='text-align: center; font-size: 11px; color: #64748b; margin-top:"
-    " -10px;'>Multi-Campus SIS & Registrar</p>",
-    unsafe_allow_html=True,
-)
-
-if os.path.exists(LOGO_FILE):
-  st.sidebar.image(LOGO_FILE, use_column_width=True)
-
-st.sidebar.markdown("---")
-role = st.sidebar.selectbox(
-    "🧭 Select Portal Access",
-    [
-        "Home / Public Announcements & Contacts",
-        "Online Admission Application",
-        "Head Registrar & Administration",
-        "Staff & Registrar Officers",
-        "Student Portal",
-    ],
-)
-
-# --- HOME PORTAL ---
-if role == "Home / Public Announcements & Contacts":
-  col1, col2 = st.columns([2, 1])
-  with col1:
-    st.title("🏛️ HANEK TECHNOLOGY AND BUSINESS COLLEGE")
-    st.subheader(
-        "Official Multi-Campus Registrar & Student Information System"
-    )
-    st.markdown(
-        "Serving Wolaita Sodo, Basketo Laska, Boloso Bombe, and Jinka campuses."
-    )
-  with col2:
-    if os.path.exists(LOGO_FILE):
-      st.image(LOGO_FILE, width=200)
-
-  st.markdown("---")
-  st.markdown("### 📢 Public Announcements")
-  ann_df = pd.read_csv(ANNOUNCE_FILE)
-  if ann_df.empty:
-    st.info("No public announcements currently posted.")
-  else:
-    for _, row in ann_df.iterrows():
-      st.markdown(
-          f"""
-                <div class="notice-card">
-                    <h4 style="margin: 0; color: #1e3a8a;">{row['Title']}</h4>
-                    <p style="font-size: 12px; color: #64748b;"><b>Date:</b> {row['Date']} | <b>{row['Category']}</b></p>
-                    <p style="margin: 0;">{row['Content']}</p>
-                </div>
-            """,
-          unsafe_allow_html=True,
-      )
-
-  st.markdown("---")
-  st.markdown("### 📞 Institutional Contact Directory")
-  st.markdown(
-      """
-        <div class="contact-box">
-            <h4 style="color: #1e3a8a; margin-top: 0;">Office of the Registrar</h4>
-            <p><b>Headquarters:</b> Wolaita Sodo, Ethiopia (P.O. Box 23)</p>
-            <p><b>Telephone:</b> +251-46-180-3164 / +251916747538</p>
-            <p><b>Email:</b> registrar@hanekcollege.edu.et</p>
-            <p><b>Website:</b> http://www.hanekcollege.edu.et</p>
-        </div>
     """,
-      unsafe_allow_html=True,
-  )
+    unsafe_allow_html=True,
+)
 
-# --- ONLINE ADMISSION ---
-elif role == "Online Admission Application":
-  st.title("📋 Online Admission Application")
-  departments_list = get_departments()
-  programs_list = get_programs()
 
-  with st.form("online_app"):
-    app_name = st.text_input("Full Legal Name")
-    app_phone = st.text_input("Phone Number (+251...)")
-    app_campus = st.selectbox("Preferred Campus", CAMPUSES)
-    app_dept = st.selectbox("Department", departments_list)
-    app_prog = st.selectbox("Program Level", programs_list)
-    app_mod = st.selectbox("Modality", ["Regular", "Extension"])
+def is_logged_in():
+    return bool(
+        st.session_state.get("authenticated")
+        and st.session_state.get("username")
+    )
 
-    if st.form_submit_button("Submit Application"):
-      if app_name and app_phone:
-        apps_df = pd.read_csv(APPLICATIONS_FILE)
-        new_app = pd.DataFrame([{
-            "AppID": "".join(random.choices(string.ascii_uppercase, k=6)),
-            "FullName": app_name,
-            "Phone": app_phone,
-            "Campus": app_campus,
-            "Department": app_dept,
-            "ProgramLevel": app_prog,
-            "Modality": app_mod,
-            "Status": "Pending Review",
-            "DateSubmitted": pd.Timestamp.now().strftime("%Y-%m-%d"),
-        }])
-        apps_df = pd.concat([apps_df, new_app], ignore_index=True)
-        apps_df.to_csv(APPLICATIONS_FILE, index=False)
-        st.success(f"Application submitted successfully for {app_name}!")
-      else:
-        st.error("Please provide name and phone number.")
 
-# --- HEAD REGISTRAR PORTAL ---
-elif role == "Head Registrar & Administration":
-  st.sidebar.subheader("🔐 Head Registrar Login")
-  username = st.sidebar.text_input("Username")
-  password = st.sidebar.text_input("Password", type="password")
+def has_role(*allowed_roles):
+    return is_logged_in() and (
+        st.session_state.get("role") in allowed_roles
+        or st.session_state.get("role") == "System Administrator"
+    )
 
-  if st.sidebar.button("Login"):
-    if username == "admin" and password == "password123":
-      st.session_state["authenticated"] = True
-      st.session_state["role"] = "Admin"
-      st.success("Logged in successfully!")
-      st.rerun()
+
+def campus_allowed(campus):
+    user_campus = st.session_state.get("campus", "All Campuses")
+    return user_campus == "All Campuses" or user_campus == campus
+
+
+def login_form():
+    st.markdown(
+        f"""
+        <div class="hero">
+            <h1>🎓 {safe_text(APP_NAME)}</h1>
+            <p>Secure Academic, Admissions and Registrar Portal</p>
+            <p>Student records • Academic results • Institutional services</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    with st.form("login_form", clear_on_submit=False):
+        username = st.text_input("Institutional Username")
+        password = st.text_input("Password", type="password")
+        submitted = st.form_submit_button(
+            "Sign In Securely",
+            use_container_width=True,
+        )
+
+    if not submitted:
+        return
+
+    if st.session_state.get("login_locked_until", 0) > datetime.now().timestamp():
+        st.error("Access is temporarily restricted. Please try again later.")
+        return
+
+    row = query_one(
+        """
+        SELECT username, password_hash, full_name, role, campus,
+               department, active, must_change_password
+        FROM users WHERE username = ?
+        """,
+        (username.strip(),),
+    )
+
+    if (
+        row
+        and row["active"] == 1
+        and verify_password(password, row["password_hash"])
+    ):
+        # Upgrade any legacy plaintext password on successful login.
+        if not row["password_hash"].startswith("pbkdf2_sha256$"):
+            execute(
+                "UPDATE users SET password_hash = ?, "
+                "must_change_password = 1 WHERE username = ?",
+                (hash_password(password), username.strip()),
+            )
+
+        st.session_state["authenticated"] = True
+        st.session_state["username"] = row["username"]
+        st.session_state["display_name"] = row["full_name"]
+        st.session_state["role"] = row["role"]
+        st.session_state["campus"] = row["campus"]
+        st.session_state["department"] = row["department"]
+        st.session_state["login_attempts"] = 0
+        log_event("LOGIN_SUCCESS")
+        st.rerun()
     else:
-      st.sidebar.error("Invalid Credentials")
+        attempts = int(st.session_state.get("login_attempts", 0)) + 1
+        st.session_state["login_attempts"] = attempts
+        if attempts >= 5:
+            st.session_state["login_locked_until"] = (
+                datetime.now().timestamp() + 300
+            )
+            st.session_state["login_attempts"] = 0
+        log_event("LOGIN_FAILURE", "Invalid credentials")
+        st.error("The supplied credentials are invalid or the account is inactive.")
 
-  if st.session_state.get("role") == "Admin":
-    st.title("🛡️ Head Registrar Control Dashboard")
 
-    # ALL 10 ADMINISTRATIVE CONTROL TABS
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10 = st.tabs([
-        "Student Records Master",
-        "Photo Approvals",
-        "Applicants & Admissions",
-        "Staff & Officer Directory",
-        "Announcements & Notices",
-        "Departments & Programs",
-        "Grade Approvals & Audits",
-        "Financial Accounts",
-        "Official Credential Issuance",
-        "System Configuration & Logs",
-    ])
+def logout():
+    log_event("LOGOUT")
+    for key in [
+        "authenticated",
+        "username",
+        "display_name",
+        "role",
+        "campus",
+        "department",
+        "student_view_id",
+    ]:
+        st.session_state.pop(key, None)
+    st.rerun()
 
-    departments_list = get_departments()
-    programs_list = get_programs()
 
-    with tab1:
-      st.subheader("🎓 Student Master Record Management (CRUD)")
-      students_df = pd.read_csv(STUDENT_FILE)
-      with st.expander("➕ Register New Student Profile", expanded=False):
-        with st.form("add_student_form"):
-          col1, col2 = st.columns(2)
-          with col1:
-            s_id = st.text_input("Student ID (e.g., HBC/001/26)")
-            s_name = st.text_input("Full Legal Name")
-            s_campus = st.selectbox("Assigned Campus", CAMPUSES)
-          with col2:
-            s_dept = st.selectbox("Department", departments_list)
-            s_prog = st.selectbox("Program Level", programs_list)
-            s_mod = st.selectbox("Modality", ["Regular", "Extension"])
-            s_pass = st.text_input("Default Student Password", type="password")
+# ============================================================
+# 5. REUSABLE DATA FUNCTIONS
+# ============================================================
 
-          if st.form_submit_button("Admit Student Official Record"):
-            if s_id and s_name:
-              if s_id in students_df["StudentID"].values:
-                st.error("Student ID already exists.")
-              else:
-                new_row = pd.DataFrame([{
-                    "StudentID": s_id,
-                    "FullName": s_name,
-                    "Campus": s_campus,
-                    "Department": s_dept,
-                    "ProgramLevel": s_prog,
-                    "Modality": s_mod,
-                    "Year": "1",
-                    "Password": s_pass,
-                    "Photo": "",
-                    "PhotoStatus": "Not Uploaded",
-                }])
-                students_df = pd.concat(
-                    [students_df, new_row], ignore_index=True
+def get_student(student_id):
+    return query_one(
+        "SELECT * FROM students WHERE student_id = ?",
+        (student_id,),
+    )
+
+
+def student_options(campus_filter=True):
+    sql = """
+        SELECT student_id, full_name, campus
+        FROM students WHERE status != 'Withdrawn'
+    """
+    params = []
+    if campus_filter and st.session_state.get("campus") != "All Campuses":
+        sql += " AND campus = ?"
+        params.append(st.session_state["campus"])
+    sql += " ORDER BY full_name"
+
+    df = query_df(sql, tuple(params))
+    return {
+        f"{r.student_id} — {r.full_name} ({r.campus})": r.student_id
+        for r in df.itertuples()
+    }
+
+
+def register_student(
+    student_id,
+    full_name,
+    campus,
+    department,
+    program,
+    modality,
+    admission_year,
+    phone="",
+    email="",
+    sex="",
+    date_of_birth="",
+    address="",
+):
+    execute(
+        """
+        INSERT INTO students (
+            student_id, full_name, sex, date_of_birth, phone, email,
+            address, campus, department, program, modality,
+            admission_year, study_year, semester, status,
+            photo_path, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1,
+                  'Semester I', 'Active', '', ?)
+        """,
+        (
+            student_id.strip(),
+            full_name.strip(),
+            sex,
+            date_of_birth,
+            phone.strip(),
+            email.strip(),
+            address.strip(),
+            campus,
+            department,
+            program,
+            modality,
+            int(admission_year),
+            now_string(),
+        ),
+    )
+
+
+def current_balance(student_id):
+    row = query_one(
+        """
+        SELECT total_fee, amount_paid FROM finance
+        WHERE student_id = ?
+        """,
+        (student_id,),
+    )
+    if not row:
+        return None
+    return max(0.0, float(row["total_fee"]) - float(row["amount_paid"]))
+
+
+def grade_summary(student_id):
+    df = query_df(
+        """
+        SELECT credit_hours, grade_point, score
+        FROM grades
+        WHERE student_id = ? AND status = 'Approved'
+        """,
+        (student_id,),
+    )
+    if df.empty:
+        return 0.0, 0, 0.0
+
+    credits = pd.to_numeric(df["credit_hours"], errors="coerce").fillna(0)
+    points = pd.to_numeric(df["grade_point"], errors="coerce").fillna(0)
+    total_credits = float(credits.sum())
+    quality_points = float((credits * points).sum())
+    cgpa = quality_points / total_credits if total_credits > 0 else 0.0
+    return cgpa, len(df), total_credits
+
+
+def download_df(df, filename, label="Download CSV"):
+    st.download_button(
+        label,
+        data=df.to_csv(index=False).encode("utf-8-sig"),
+        file_name=filename,
+        mime="text/csv",
+        use_container_width=True,
+    )
+
+
+# ============================================================
+# 6. PUBLIC PORTAL
+# ============================================================
+
+def render_public_portal():
+    st.markdown(
+        f"""
+        <div class="hero">
+            <h1>🎓 {safe_text(get_setting('institution_name', APP_NAME))}</h1>
+            <p><strong>Official Multi-Campus Academic and Student Services Portal</strong></p>
+            <p>Advancing professional competence, academic integrity and lifelong learning.</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.markdown("### Institutional Overview")
+    st.write(
+        "The institutional portal provides access to admissions information, "
+        "academic notices and student services across the college's campuses. "
+        "Applicants and students should consult the Registrar for official "
+        "admission requirements, academic regulations and credential verification."
+    )
+
+    campus_cols = st.columns(4)
+    for col, campus in zip(campus_cols, CAMPUSES):
+        with col:
+            st.markdown(f"**📍 {campus} Campus**")
+
+    st.markdown("---")
+    st.subheader("Public Announcements")
+
+    notices = query_df(
+        """
+        SELECT title, category, content, created_at
+        FROM announcements WHERE published = 1
+        ORDER BY created_at DESC
+        """
+    )
+    if notices.empty:
+        st.info("No public announcements have been published.")
+    else:
+        for item in notices.itertuples():
+            st.markdown(
+                f"""
+                <div class="notice">
+                    <strong>{safe_text(item.title)}</strong>
+                    <div class="small-muted">
+                        {safe_text(item.category)} · {safe_text(item.created_at)}
+                    </div>
+                    <p>{safe_text(item.content)}</p>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+    st.markdown("---")
+    st.subheader("Online Admission Application")
+
+    with st.form("public_application", clear_on_submit=True):
+        a1, a2 = st.columns(2)
+        with a1:
+            app_name = st.text_input("Full Legal Name *")
+            app_phone = st.text_input("Telephone Number *")
+            app_email = st.text_input("Email Address")
+            app_campus = st.selectbox("Preferred Campus", CAMPUSES)
+        with a2:
+            app_dept = st.selectbox("Department", get_departments())
+            app_program = st.selectbox("Program", get_programs())
+            app_modality = st.selectbox("Study Modality", MODALITIES)
+            qualification = st.text_input("Previous Qualification")
+
+        consent = st.checkbox(
+            "I confirm that the information supplied is accurate and may "
+            "be used for admissions processing."
+        )
+        submit_app = st.form_submit_button(
+            "Submit Admission Application",
+            use_container_width=True,
+        )
+
+    if submit_app:
+        if not app_name.strip() or not app_phone.strip():
+            st.error("The full legal name and telephone number are required.")
+        elif app_email.strip() and not valid_email(app_email):
+            st.error("Please provide a valid email address.")
+        elif not consent:
+            st.error("Please confirm the accuracy of the submitted information.")
+        else:
+            app_id = make_id("APP")
+            execute(
+                """
+                INSERT INTO applications (
+                    application_id, full_name, phone, email, campus,
+                    department, program, modality, qualification,
+                    status, submitted_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending Review', ?)
+                """,
+                (
+                    app_id,
+                    app_name.strip(),
+                    app_phone.strip(),
+                    app_email.strip(),
+                    app_campus,
+                    app_dept,
+                    app_program,
+                    app_modality,
+                    qualification.strip(),
+                    now_string(),
+                ),
+            )
+            log_event("APPLICATION_SUBMITTED", app_id)
+            st.success(
+                f"Your application has been recorded. Reference number: {app_id}. "
+                "Retain this reference for future correspondence."
+            )
+
+    st.markdown("---")
+    st.subheader("Institutional Contact Information")
+    c1, c2 = st.columns(2)
+    with c1:
+        st.write(f"**Address:** {get_setting('institution_address')}")
+        st.write(f"**P.O. Box:** {get_setting('po_box')}")
+        st.write(f"**Telephone:** {get_setting('telephone')}")
+    with c2:
+        st.write(f"**Email:** {get_setting('email') or 'Contact the Registrar'}")
+        st.write(f"**Website:** {get_setting('website') or 'Not configured'}")
+
+    st.caption(
+        "Official admissions decisions and academic credentials are subject "
+        "to institutional verification and applicable regulations."
+    )
+
+
+# ============================================================
+# 7. ADMINISTRATOR DASHBOARD
+# ============================================================
+
+def render_admin_dashboard():
+    st.title("Institutional Administration Dashboard")
+    st.caption(
+        f"Academic Year: {academic_year()} | "
+        f"Campus Scope: {st.session_state['campus']}"
+    )
+
+    total_students = query_one("SELECT COUNT(*) AS n FROM students")["n"]
+    active_students = query_one(
+        "SELECT COUNT(*) AS n FROM students WHERE status = 'Active'"
+    )["n"]
+    pending_apps = query_one(
+        "SELECT COUNT(*) AS n FROM applications "
+        "WHERE status IN ('Pending Review', 'Under Review')"
+    )["n"]
+    pending_grades = query_one(
+        "SELECT COUNT(*) AS n FROM grades WHERE status = 'Pending'"
+    )["n"]
+
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Total Students", f"{total_students:,}")
+    m2.metric("Active Students", f"{active_students:,}")
+    m3.metric("Applications Awaiting Review", f"{pending_apps:,}")
+    m4.metric("Grades Awaiting Approval", f"{pending_grades:,}")
+
+    tabs = st.tabs(
+        [
+            "Student Records",
+            "Admissions",
+            "Staff Accounts",
+            "Courses",
+            "Grade Management",
+            "Finance",
+            "Announcements",
+            "Credentials",
+            "Reports",
+            "System Settings",
+        ]
+    )
+
+    # ---------------- STUDENT RECORDS ----------------
+    with tabs[0]:
+        st.subheader("Student Records Management")
+        search = st.text_input(
+            "Search by student ID, name, department or campus",
+            key="admin_student_search",
+        )
+        students = query_df(
+            """
+            SELECT student_id AS 'Student ID',
+                   full_name AS 'Full Name',
+                   campus AS Campus,
+                   department AS Department,
+                   program AS Program,
+                   modality AS Modality,
+                   admission_year AS 'Admission Year',
+                   study_year AS 'Study Year',
+                   status AS Status
+            FROM students ORDER BY created_at DESC
+            """
+        )
+        if search.strip():
+            mask = students.astype(str).apply(
+                lambda col: col.str.contains(
+                    search.strip(), case=False, na=False
                 )
-                students_df.to_csv(STUDENT_FILE, index=False)
-                st.success(f"Student {s_name} admitted successfully!")
+            ).any(axis=1)
+            students = students[mask]
+
+        if not students.empty:
+            st.dataframe(students, use_container_width=True, hide_index=True)
+            download_df(students, "hanek_student_records.csv")
+        else:
+            st.info("No matching student records were found.")
+
+        with st.expander("Register a New Student", expanded=False):
+            with st.form("register_student_form", clear_on_submit=True):
+                c1, c2 = st.columns(2)
+                with c1:
+                    sid = st.text_input("Student Identification Number *")
+                    name = st.text_input("Full Legal Name *")
+                    sex = st.selectbox(
+                        "Sex",
+                        ["Not Specified", "Female", "Male"],
+                    )
+                    dob = st.text_input("Date of Birth (YYYY-MM-DD)")
+                    phone = st.text_input("Telephone Number")
+                    email = st.text_input("Email Address")
+                with c2:
+                    campus = st.selectbox("Campus", CAMPUSES)
+                    dept = st.selectbox("Department", get_departments())
+                    program = st.selectbox("Program", get_programs())
+                    modality = st.selectbox("Study Modality", MODALITIES)
+                    adm_year = st.number_input(
+                        "Admission Year",
+                        min_value=1990,
+                        max_value=CURRENT_YEAR + 2,
+                        value=CURRENT_YEAR,
+                    )
+                    address = st.text_input("Postal / Residential Address")
+
+                submit_student = st.form_submit_button(
+                    "Create Student Record",
+                    use_container_width=True,
+                )
+
+            if submit_student:
+                if not sid.strip() or not name.strip():
+                    st.error("The student ID and full legal name are required.")
+                elif email.strip() and not valid_email(email):
+                    st.error("Enter a valid email address.")
+                elif get_student(sid.strip()):
+                    st.error("This student identification number already exists.")
+                else:
+                    try:
+                        register_student(
+                            sid, name, campus, dept, program, modality,
+                            adm_year, phone, email,
+                            "" if sex == "Not Specified" else sex,
+                            dob, address,
+                        )
+                        log_event("STUDENT_CREATED", sid)
+                        st.success("The student record has been created.")
+                        st.rerun()
+                    except sqlite3.IntegrityError:
+                        st.error("The student record could not be saved.")
+
+        with st.expander("Update Student Status", expanded=False):
+            ids = student_options()
+            if ids:
+                selected = st.selectbox(
+                    "Select Student",
+                    list(ids.keys()),
+                    key="update_student_status_select",
+                )
+                selected_id = ids[selected]
+                existing = get_student(selected_id)
+                status_choices = [
+                    "Active", "Graduated", "Suspended", "Withdrawn", "Deferred"
+                ]
+                with st.form("update_student_status_form"):
+                    new_status = st.selectbox(
+                        "New Status",
+                        status_choices,
+                        index=(
+                            status_choices.index(existing["status"])
+                            if existing["status"] in status_choices
+                            else 0
+                        ),
+                    )
+                    new_year = st.number_input(
+                        "Current Study Year",
+                        min_value=1,
+                        max_value=10,
+                        value=int(existing["study_year"]),
+                    )
+                    save_status = st.form_submit_button("Save Changes")
+                if save_status:
+                    execute(
+                        """
+                        UPDATE students SET status = ?, study_year = ?
+                        WHERE student_id = ?
+                        """,
+                        (new_status, int(new_year), selected_id),
+                    )
+                    log_event("STUDENT_UPDATED", selected_id)
+                    st.success("Student information has been updated.")
+                    st.rerun()
+            else:
+                st.info("No students are available for modification.")
+
+    # ---------------- ADMISSIONS ----------------
+    with tabs[1]:
+        st.subheader("Admissions and Application Review")
+        apps = query_df(
+            """
+            SELECT application_id AS 'Application Reference',
+                   full_name AS 'Applicant Name',
+                   phone AS Telephone,
+                   email AS Email,
+                   campus AS Campus,
+                   department AS Department,
+                   program AS Program,
+                   modality AS Modality,
+                   status AS Status,
+                   submitted_at AS 'Submitted At'
+            FROM applications ORDER BY submitted_at DESC
+            """
+        )
+        st.dataframe(apps, use_container_width=True, hide_index=True)
+        download_df(apps, "hanek_admissions.csv")
+
+        pending = query_df(
+            """
+            SELECT application_id, full_name, phone, email, campus,
+                   department, program, modality, qualification, status
+            FROM applications
+            WHERE status IN ('Pending Review', 'Under Review', 'Waitlisted')
+            ORDER BY submitted_at
+            """
+        )
+        if not pending.empty:
+            app_map = {
+                f"{r.application_id} — {r.full_name}": r.application_id
+                for r in pending.itertuples()
+            }
+            selected_label = st.selectbox(
+                "Select an Application for Review",
+                list(app_map.keys()),
+            )
+            selected_app = app_map[selected_label]
+            app_row = query_one(
+                "SELECT * FROM applications WHERE application_id = ?",
+                (selected_app,),
+            )
+            with st.form("application_review_form"):
+                review_status = st.selectbox(
+                    "Decision",
+                    ["Under Review", "Admitted", "Rejected", "Waitlisted"],
+                )
+                review_note = st.text_area("Review Notes")
+                review_submit = st.form_submit_button("Save Review Decision")
+            if review_submit:
+                execute(
+                    """
+                    UPDATE applications
+                    SET status = ?, reviewed_by = ?, review_note = ?
+                    WHERE application_id = ?
+                    """,
+                    (
+                        review_status,
+                        st.session_state["username"],
+                        review_note.strip(),
+                        selected_app,
+                    ),
+                )
+                log_event("APPLICATION_REVIEWED", selected_app)
+
+                if review_status == "Admitted":
+                    st.info(
+                        "The application is marked as admitted. Create the "
+                        "official student record in Student Records after "
+                        "confirming the admission documents."
+                    )
+                else:
+                    st.success("The application decision has been saved.")
+                st.rerun()
+        else:
+            st.info("There are no applications awaiting review.")
+
+    # ---------------- STAFF ACCOUNTS ----------------
+    with tabs[2]:
+        st.subheader("Staff Directory and Access Management")
+        staff = query_df(
+            """
+            SELECT username AS Username, full_name AS 'Full Name',
+                   role AS Role, campus AS Campus,
+                   department AS Department, email AS Email,
+                   active AS Active
+            FROM users ORDER BY full_name
+            """
+        )
+        st.dataframe(staff, use_container_width=True, hide_index=True)
+
+        with st.expander("Create Staff Account"):
+            with st.form("create_staff_account_form", clear_on_submit=True):
+                staff_user = st.text_input("Username *")
+                staff_name = st.text_input("Full Name *")
+                staff_email = st.text_input("Institutional Email")
+                staff_role = st.selectbox("Institutional Role", STAFF_ROLES)
+                staff_campus = st.selectbox(
+                    "Authorized Campus",
+                    ["All Campuses"] + CAMPUSES,
+                )
+                staff_dept = st.selectbox(
+                    "Department / Unit",
+                    get_departments() + ["Office of the Registrar", "Finance"],
+                )
+                staff_temp_password = st.text_input(
+                    "Temporary Password *", type="password"
+                )
+                create_staff = st.form_submit_button("Create Staff Account")
+
+            if create_staff:
+                if (
+                    not staff_user.strip()
+                    or not staff_name.strip()
+                    or len(staff_temp_password) < 12
+                ):
+                    st.error(
+                        "Provide a username, full name and temporary password "
+                        "of at least 12 characters."
+                    )
+                elif staff_email.strip() and not valid_email(staff_email):
+                    st.error("Enter a valid institutional email address.")
+                elif query_one(
+                    "SELECT username FROM users WHERE username = ?",
+                    (staff_user.strip(),),
+                ):
+                    st.error("This username is already in use.")
+                else:
+                    execute(
+                        """
+                        INSERT INTO users (
+                            username, password_hash, full_name, role,
+                            campus, department, email, active,
+                            must_change_password, created_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, 1, 1, ?)
+                        """,
+                        (
+                            staff_user.strip(),
+                            hash_password(staff_temp_password),
+                            staff_name.strip(),
+                            staff_role,
+                            staff_campus,
+                            staff_dept,
+                            staff_email.strip(),
+                            now_string(),
+                        ),
+                    )
+                    log_event("STAFF_ACCOUNT_CREATED", staff_user)
+                    st.success("The staff account has been created.")
+                    st.rerun()
+
+        with st.expander("Activate, Deactivate or Reset an Account"):
+            user_list = query_df(
+                "SELECT username, full_name FROM users ORDER BY username"
+            )
+            if not user_list.empty:
+                user_options = {
+                    f"{r.username} — {r.full_name}": r.username
+                    for r in user_list.itertuples()
+                }
+                target_label = st.selectbox(
+                    "Select Account", list(user_options.keys())
+                )
+                target_user = user_options[target_label]
+                account = query_one(
+                    "SELECT * FROM users WHERE username = ?",
+                    (target_user,),
+                )
+                with st.form("account_admin_form"):
+                    active_state = st.selectbox(
+                        "Account Status",
+                        ["Active", "Inactive"],
+                        index=0 if account["active"] else 1,
+                    )
+                    reset_password = st.text_input(
+                        "New Temporary Password (optional)",
+                        type="password",
+                    )
+                    apply_account_change = st.form_submit_button("Apply Changes")
+                if apply_account_change:
+                    execute(
+                        """
+                        UPDATE users SET active = ? WHERE username = ?
+                        """,
+                        (1 if active_state == "Active" else 0, target_user),
+                    )
+                    if reset_password:
+                        if len(reset_password) < 12:
+                            st.error(
+                                "The new temporary password must contain at "
+                                "least 12 characters."
+                            )
+                        else:
+                            execute(
+                                """
+                                UPDATE users
+                                SET password_hash = ?, must_change_password = 1
+                                WHERE username = ?
+                                """,
+                                (hash_password(reset_password), target_user),
+                            )
+                    log_event("STAFF_ACCOUNT_UPDATED", target_user)
+                    st.success("Account settings have been updated.")
+                    st.rerun()
+
+    # ---------------- COURSES ----------------
+    with tabs[3]:
+        st.subheader("Course Catalogue and Curriculum")
+        course_df = query_df(
+            """
+            SELECT course_code AS 'Course Code',
+                   course_name AS 'Course Name',
+                   department AS Department,
+                   program AS Program,
+                   level AS Level,
+                   credit_hours AS 'Credit Hours',
+                   active AS Active
+            FROM courses ORDER BY department, course_name
+            """
+        )
+        st.dataframe(course_df, use_container_width=True, hide_index=True)
+        download_df(course_df, "hanek_course_catalogue.csv")
+
+        with st.expander("Add a Course"):
+            with st.form("add_course_form", clear_on_submit=True):
+                cc1, cc2 = st.columns(2)
+                with cc1:
+                    course_code = st.text_input("Course Code *")
+                    course_name = st.text_input("Course Title *")
+                    course_credits = st.number_input(
+                        "Credit Hours", min_value=0.5, max_value=30.0, value=3.0
+                    )
+                with cc2:
+                    course_dept = st.selectbox(
+                        "Department", get_departments()
+                    )
+                    course_program = st.selectbox(
+                        "Program", get_programs()
+                    )
+                    course_level = st.selectbox(
+                        "Level",
+                        [
+                            "TVET Level I", "TVET Level II",
+                            "TVET Level III", "TVET Level IV",
+                            "Year I", "Year II", "Year III", "Year IV",
+                        ],
+                    )
+                add_course = st.form_submit_button("Save Course")
+
+            if add_course:
+                if not course_code.strip() or not course_name.strip():
+                    st.error("Course code and course title are required.")
+                elif query_one(
+                    "SELECT course_code FROM courses WHERE course_code = ?",
+                    (course_code.strip().upper(),),
+                ):
+                    st.error("This course code already exists.")
+                else:
+                    execute(
+                        """
+                        INSERT INTO courses (
+                            course_code, course_name, department, program,
+                            level, credit_hours
+                        ) VALUES (?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            course_code.strip().upper(),
+                            course_name.strip(),
+                            course_dept,
+                            course_program,
+                            course_level,
+                            float(course_credits),
+                        ),
+                    )
+                    log_event("COURSE_CREATED", course_code)
+                    st.success("The course has been added.")
+                    st.rerun()
+
+    # ---------------- GRADES ----------------
+    with tabs[4]:
+        st.subheader("Assessment, Grade Approval and Academic Records")
+        grades = query_df(
+            """
+            SELECT grade_id AS 'Grade Reference',
+                   student_id AS 'Student ID',
+                   course_code AS 'Course Code',
+                   course_name AS 'Course Name',
+                   credit_hours AS 'Credit Hours',
+                   score AS Score,
+                   letter_grade AS Grade,
+                   grade_point AS 'Grade Point',
+                   academic_year AS 'Academic Year',
+                   semester AS Semester,
+                   instructor AS Instructor,
+                   status AS Status
+            FROM grades ORDER BY submitted_at DESC
+            """
+        )
+        st.dataframe(grades, use_container_width=True, hide_index=True)
+        download_df(grades, "hanek_grade_records.csv")
+
+        pending = query_df(
+            "SELECT grade_id, student_id, course_code, course_name, score, "
+            "status FROM grades WHERE status = 'Pending' "
+            "ORDER BY submitted_at"
+        )
+        if not pending.empty:
+            grade_options = {
+                f"{r.grade_id} — {r.student_id} — {r.course_code} "
+                f"({r.score})": r.grade_id
+                for r in pending.itertuples()
+            }
+            selected_grade_label = st.selectbox(
+                "Select a Grade Submission for Review",
+                list(grade_options.keys()),
+            )
+            selected_grade = grade_options[selected_grade_label]
+            grade_decision = st.radio(
+                "Review Decision",
+                ["Approve", "Reject"],
+                horizontal=True,
+            )
+            if st.button("Confirm Grade Decision", type="primary"):
+                execute(
+                    """
+                    UPDATE grades
+                    SET status = ?, approved_by = ?, approved_at = ?
+                    WHERE grade_id = ? AND status = 'Pending'
+                    """,
+                    (
+                        "Approved" if grade_decision == "Approve" else "Rejected",
+                        st.session_state["username"],
+                        now_string(),
+                        selected_grade,
+                    ),
+                )
+                log_event("GRADE_REVIEWED", selected_grade)
+                st.success("The grade review decision has been recorded.")
+                st.rerun()
+        else:
+            st.info("No grade submissions are awaiting review.")
+
+    # ---------------- FINANCE ----------------
+    with tabs[5]:
+        st.subheader("Student Accounts, Payments and Financial Clearance")
+        finance_df = query_df(
+            """
+            SELECT f.student_id AS 'Student ID',
+                   s.full_name AS 'Student Name',
+                   s.campus AS Campus,
+                   f.total_fee AS 'Total Fee (ETB)',
+                   f.amount_paid AS 'Amount Paid (ETB)',
+                   MAX(f.total_fee - f.amount_paid, 0)
+                       AS 'Outstanding Balance (ETB)',
+                   f.last_updated AS 'Last Updated'
+            FROM finance f JOIN students s ON s.student_id = f.student_id
+            ORDER BY s.full_name
+            """
+        )
+        st.dataframe(finance_df, use_container_width=True, hide_index=True)
+        download_df(finance_df, "hanek_financial_accounts.csv")
+
+        ids = student_options()
+        if ids:
+            with st.expander("Set or Update a Student Fee Account"):
+                with st.form("finance_account_form"):
+                    selected_finance_label = st.selectbox(
+                        "Student", list(ids.keys())
+                    )
+                    total_fee = st.number_input(
+                        "Total Approved Fee (ETB)",
+                        min_value=0.0,
+                        value=15000.0,
+                        step=500.0,
+                    )
+                    finance_notes = st.text_area("Administrative Notes")
+                    save_fee = st.form_submit_button("Save Fee Account")
+                if save_fee:
+                    selected_finance_id = ids[selected_finance_label]
+                    execute(
+                        """
+                        INSERT INTO finance (
+                            finance_id, student_id, total_fee,
+                            amount_paid, last_updated, notes
+                        ) VALUES (?, ?, ?, 0, ?, ?)
+                        ON CONFLICT(student_id) DO UPDATE SET
+                            total_fee = excluded.total_fee,
+                            last_updated = excluded.last_updated,
+                            notes = excluded.notes
+                        """,
+                        (
+                            make_id("FIN"),
+                            selected_finance_id,
+                            float(total_fee),
+                            now_string(),
+                            finance_notes.strip(),
+                        ),
+                    )
+                    log_event("FINANCE_ACCOUNT_UPDATED", selected_finance_id)
+                    st.success("The fee account has been updated.")
+                    st.rerun()
+
+            with st.expander("Record a Payment"):
+                with st.form("record_payment_form", clear_on_submit=True):
+                    payment_student_label = st.selectbox(
+                        "Student", list(ids.keys()), key="payment_student"
+                    )
+                    payment_amount = st.number_input(
+                        "Payment Amount (ETB)",
+                        min_value=0.01,
+                        value=1000.0,
+                        step=100.0,
+                    )
+                    payment_method = st.selectbox(
+                        "Payment Method",
+                        ["Bank Transfer", "Cash", "Mobile Payment", "Other"],
+                    )
+                    receipt_number = st.text_input("Unique Receipt Number")
+                    payment_notes = st.text_area("Payment Notes")
+                    record_payment = st.form_submit_button("Record Payment")
+
+                if record_payment:
+                    sid = ids[payment_student_label]
+                    balance = current_balance(sid)
+                    if balance is None:
+                        st.error(
+                            "Create a fee account for this student before "
+                            "recording payments."
+                        )
+                    elif payment_amount > balance:
+                        st.error(
+                            "The payment exceeds the recorded outstanding balance."
+                        )
+                    elif not receipt_number.strip():
+                        st.error("A receipt number is required.")
+                    elif query_one(
+                        "SELECT payment_id FROM payments WHERE receipt_number = ?",
+                        (receipt_number.strip(),),
+                    ):
+                        st.error("This receipt number has already been recorded.")
+                    else:
+                        with db_connection() as conn:
+                            conn.execute(
+                                """
+                                INSERT INTO payments (
+                                    payment_id, student_id, amount,
+                                    payment_method, receipt_number,
+                                    received_by, payment_date, notes
+                                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                                """,
+                                (
+                                    make_id("PAY"),
+                                    sid,
+                                    float(payment_amount),
+                                    payment_method,
+                                    receipt_number.strip(),
+                                    st.session_state["username"],
+                                    now_string(),
+                                    payment_notes.strip(),
+                                ),
+                            )
+                            conn.execute(
+                                """
+                                UPDATE finance
+                                SET amount_paid = amount_paid + ?,
+                                    last_updated = ?
+                                WHERE student_id = ?
+                                """,
+                                (float(payment_amount), now_string(), sid),
+                            )
+                        log_event("PAYMENT_RECORDED", receipt_number)
+                        st.success("The payment has been recorded.")
+                        st.rerun()
+
+        payments = query_df(
+            """
+            SELECT payment_id AS 'Payment Reference',
+                   student_id AS 'Student ID',
+                   amount AS 'Amount (ETB)',
+                   payment_method AS 'Method',
+                   receipt_number AS 'Receipt Number',
+                   received_by AS 'Received By',
+                   payment_date AS 'Payment Date'
+            FROM payments ORDER BY payment_date DESC
+            """
+        )
+        st.markdown("#### Payment Register")
+        st.dataframe(payments, use_container_width=True, hide_index=True)
+
+    # ---------------- ANNOUNCEMENTS ----------------
+    with tabs[6]:
+        st.subheader("Academic Notices and Institutional Communication")
+        notices = query_df(
+            """
+            SELECT notice_id AS 'Notice ID', title AS Title,
+                   category AS Category, content AS Content,
+                   published AS Published, created_by AS 'Created By',
+                   created_at AS 'Created At'
+            FROM announcements ORDER BY created_at DESC
+            """
+        )
+        st.dataframe(notices, use_container_width=True, hide_index=True)
+
+        with st.expander("Publish an Announcement"):
+            with st.form("publish_notice_form", clear_on_submit=True):
+                notice_title = st.text_input("Announcement Title")
+                notice_category = st.selectbox(
+                    "Category", NOTICE_CATEGORIES
+                )
+                notice_content = st.text_area("Announcement Content")
+                publish_notice = st.checkbox(
+                    "Publish immediately", value=True
+                )
+                save_notice = st.form_submit_button("Save Announcement")
+            if save_notice:
+                if not notice_title.strip() or not notice_content.strip():
+                    st.error("A title and announcement content are required.")
+                else:
+                    execute(
+                        """
+                        INSERT INTO announcements (
+                            notice_id, title, category, content,
+                            published, created_by, created_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            make_id("NOT"),
+                            notice_title.strip(),
+                            notice_category,
+                            notice_content.strip(),
+                            1 if publish_notice else 0,
+                            st.session_state["username"],
+                            now_string(),
+                        ),
+                    )
+                    log_event("ANNOUNCEMENT_CREATED", notice_title)
+                    st.success("The announcement has been saved.")
+                    st.rerun()
+
+    # ---------------- CREDENTIALS ----------------
+    with tabs[7]:
+        st.subheader("Official Academic Credential Register")
+        st.warning(
+            "Issue official credentials only after verifying the student's "
+            "academic record, programme requirements and applicable financial "
+            "and institutional clearance rules."
+        )
+
+        ids = student_options()
+        if ids:
+            credential_student_label = st.selectbox(
+                "Student", list(ids.keys()), key="credential_student"
+            )
+            credential_sid = ids[credential_student_label]
+            s = get_student(credential_sid)
+            cgpa, modules, credits = grade_summary(credential_sid)
+            balance = current_balance(credential_sid)
+
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Approved Course Records", modules)
+            c2.metric("Credit Hours", f"{credits:.1f}")
+            c3.metric("Cumulative GPA", f"{cgpa:.2f}")
+
+            if balance is None:
+                st.warning(
+                    "No financial account exists. Clearance must be verified "
+                    "manually before issuing a credential."
+                )
+            else:
+                st.metric("Outstanding Balance (ETB)", f"{balance:,.2f}")
+
+            with st.form("issue_credential_form"):
+                document_type = st.selectbox(
+                    "Document Type",
+                    [
+                        "Academic Transcript",
+                        "Statement of Results",
+                        "Enrollment Verification",
+                        "Graduation Credential",
+                        "Certificate of Good Standing",
+                    ],
+                )
+                clearance_confirmed = st.checkbox(
+                    "I have verified the academic and administrative "
+                    "requirements for this document."
+                )
+                issue_document = st.form_submit_button(
+                    "Generate Credential Record"
+                )
+
+            if issue_document:
+                if not clearance_confirmed:
+                    st.error("Confirm the required checks before proceeding.")
+                elif document_type in [
+                    "Graduation Credential", "Academic Transcript"
+                ] and balance is None:
+                    st.error(
+                        "A financial account is missing. Verify clearance "
+                        "and establish the account before proceeding."
+                    )
+                elif document_type == "Graduation Credential" and (
+                    balance is not None and balance > 0
+                ):
+                    st.error(
+                        "The outstanding balance must be resolved according "
+                        "to institutional policy before issuing this document."
+                    )
+                else:
+                    verification_code = (
+                        "HBC-" + secrets.token_hex(8).upper()
+                    )
+                    credential_id = make_id("CRD")
+                    execute(
+                        """
+                        INSERT INTO credentials (
+                            credential_id, student_id, document_type,
+                            verification_code, issued_by, issued_at, status
+                        ) VALUES (?, ?, ?, ?, ?, ?, 'Issued')
+                        """,
+                        (
+                            credential_id,
+                            credential_sid,
+                            document_type,
+                            verification_code,
+                            st.session_state["username"],
+                            now_string(),
+                        ),
+                    )
+                    log_event("CREDENTIAL_ISSUED", credential_id)
+                    st.success(
+                        "The credential register entry has been created. "
+                        "Review the student information and institutional "
+                        "approval before releasing an official document."
+                    )
+                    st.code(verification_code)
+
+            if st.button("Preview Academic Record"):
+                student_grades = query_df(
+                    """
+                    SELECT course_code AS 'Course Code',
+                           course_name AS 'Course Title',
+                           credit_hours AS 'Credit Hours',
+                           score AS Score,
+                           letter_grade AS Grade,
+                           grade_point AS 'Grade Point',
+                           academic_year AS 'Academic Year',
+                           semester AS Semester
+                    FROM grades
+                    WHERE student_id = ? AND status = 'Approved'
+                    ORDER BY academic_year, semester, course_code
+                    """,
+                    (credential_sid,),
+                )
+                st.markdown(f"### {safe_text(APP_NAME)}")
+                st.markdown("**OFFICE OF THE REGISTRAR**")
+                st.write(f"**Student:** {s['full_name']}")
+                st.write(f"**Student ID:** {s['student_id']}")
+                st.write(f"**Campus:** {s['campus']}")
+                st.write(f"**Department:** {s['department']}")
+                st.write(f"**Programme:** {s['program']}")
+                st.write(f"**Admission Year:** {s['admission_year']}")
+                st.dataframe(
+                    student_grades,
+                    use_container_width=True,
+                    hide_index=True,
+                )
+                st.info(
+                    "This is a preview generated from records in the system. "
+                    "It is not, by itself, an authenticated academic transcript "
+                    "or graduation certificate."
+                )
+        else:
+            st.info("Student records must be created before credentials can be issued.")
+
+        credentials = query_df(
+            """
+            SELECT credential_id AS 'Credential ID',
+                   student_id AS 'Student ID',
+                   document_type AS 'Document Type',
+                   verification_code AS 'Verification Code',
+                   issued_by AS 'Issued By',
+                   issued_at AS 'Issued At',
+                   status AS Status
+            FROM credentials ORDER BY issued_at DESC
+            """
+        )
+        st.markdown("#### Credential Issuance Register")
+        st.dataframe(credentials, use_container_width=True, hide_index=True)
+
+    # ---------------- REPORTS ----------------
+    with tabs[8]:
+        st.subheader("Institutional Reports and Analytics")
+
+        campus_report = query_df(
+            """
+            SELECT campus AS Campus,
+                   COUNT(*) AS 'Total Students',
+                   SUM(CASE WHEN status = 'Active' THEN 1 ELSE 0 END)
+                       AS 'Active Students',
+                   SUM(CASE WHEN status = 'Graduated' THEN 1 ELSE 0 END)
+                       AS Graduates
+            FROM students GROUP BY campus ORDER BY campus
+            """
+        )
+        st.markdown("#### Student Enrolment by Campus")
+        st.dataframe(campus_report, use_container_width=True, hide_index=True)
+        download_df(campus_report, "hanek_campus_enrolment_report.csv")
+
+        department_report = query_df(
+            """
+            SELECT department AS Department, COUNT(*) AS 'Student Count'
+            FROM students GROUP BY department ORDER BY department
+            """
+        )
+        st.markdown("#### Student Enrolment by Department")
+        st.dataframe(
+            department_report, use_container_width=True, hide_index=True
+        )
+        download_df(
+            department_report,
+            "hanek_department_enrolment_report.csv",
+        )
+
+        grade_report = query_df(
+            """
+            SELECT academic_year AS 'Academic Year',
+                   semester AS Semester,
+                   COUNT(*) AS 'Approved Grade Records',
+                   AVG(score) AS 'Average Score'
+            FROM grades WHERE status = 'Approved'
+            GROUP BY academic_year, semester
+            ORDER BY academic_year, semester
+            """
+        )
+        st.markdown("#### Academic Performance Summary")
+        st.dataframe(grade_report, use_container_width=True, hide_index=True)
+        download_df(grade_report, "hanek_academic_performance.csv")
+
+        if not campus_report.empty:
+            st.bar_chart(
+                campus_report.set_index("Campus")["Total Students"]
+            )
+        if not department_report.empty:
+            st.bar_chart(
+                department_report.set_index("Department")["Student Count"]
+            )
+
+    # ---------------- SYSTEM SETTINGS ----------------
+    with tabs[9]:
+        st.subheader("Institutional Configuration and Audit")
+
+        with st.form("institution_settings_form"):
+            institution_name = st.text_input(
+                "Institution Name",
+                value=get_setting("institution_name", APP_NAME),
+            )
+            institution_address = st.text_input(
+                "Institutional Address",
+                value=get_setting("institution_address", "Wolaita Sodo, Ethiopia"),
+            )
+            po_box = st.text_input(
+                "P.O. Box", value=get_setting("po_box", "23")
+            )
+            telephone = st.text_input(
+                "Telephone", value=get_setting("telephone", "")
+            )
+            institutional_email = st.text_input(
+                "Institutional Email", value=get_setting("email", "")
+            )
+            website = st.text_input(
+                "Institutional Website", value=get_setting("website", "")
+            )
+            save_settings = st.form_submit_button("Save Institutional Settings")
+
+        if save_settings:
+            if institutional_email.strip() and not valid_email(institutional_email):
+                st.error("Enter a valid institutional email address.")
+            else:
+                for key, value in {
+                    "institution_name": institution_name,
+                    "institution_address": institution_address,
+                    "po_box": po_box,
+                    "telephone": telephone,
+                    "email": institutional_email,
+                    "website": website,
+                }.items():
+                    set_setting(key, value)
+                log_event("INSTITUTION_SETTINGS_UPDATED")
+                st.success("Institutional settings have been saved.")
                 st.rerun()
 
-      st.markdown("---")
-      st.markdown("### Existing Student Database")
-      if students_df.empty:
-        st.info("No student records found.")
-      else:
-        st.dataframe(students_df, use_container_width=True)
-        sel_edit = st.selectbox(
-            "Select Student ID for Modification", students_df["StudentID"].tolist()
-        )
-        if sel_edit:
-          st_row = students_df[students_df["StudentID"] == sel_edit].iloc[0]
-          with st.form("edit_student_form"):
-            e_name = st.text_input("Full Legal Name", value=st_row["FullName"])
-            e_campus = st.selectbox(
-                "Campus",
-                CAMPUSES,
-                index=CAMPUSES.index(st_row["Campus"])
-                if st_row["Campus"] in CAMPUSES
-                else 0,
+        st.markdown("#### Department and Programme Configuration")
+        with st.form("academic_configuration_form"):
+            dept_text = st.text_area(
+                "Departments — one per line",
+                value="\n".join(get_departments()),
             )
-            e_dept = st.selectbox(
-                "Department",
-                departments_list,
-                index=departments_list.index(st_row["Department"])
-                if st_row["Department"] in departments_list
-                else 0,
+            program_text = st.text_area(
+                "Programmes — one per line",
+                value="\n".join(get_programs()),
             )
-            e_prog = st.selectbox(
-                "Program Level",
-                programs_list,
-                index=programs_list.index(st_row["ProgramLevel"])
-                if st_row["ProgramLevel"] in programs_list
-                else 0,
-            )
-            e_pass = st.text_input(
-                "Password", value=st_row["Password"], type="password"
+            save_academic_config = st.form_submit_button(
+                "Save Academic Configuration"
             )
 
-            col_btn1, col_btn2 = st.columns(2)
-            if col_btn1.form_submit_button("💾 Save Record Changes"):
-              students_df.loc[
-                  students_df["StudentID"] == sel_edit,
-                  ["FullName", "Campus", "Department", "ProgramLevel", "Password"],
-              ] = [e_name, e_campus, e_dept, e_prog, e_pass]
-              students_df.to_csv(STUDENT_FILE, index=False)
-              st.success("Student updated successfully!")
-              st.rerun()
-            if col_btn2.form_submit_button("🗑️ Purge Student Record"):
-              students_df = students_df[students_df["StudentID"] != sel_edit]
-              students_df.to_csv(STUDENT_FILE, index=False)
-              st.warning("Student purged.")
-              st.rerun()
-
-    with tab2:
-      st.subheader("🖼️ Student Profile Photo Verification & Authorization")
-      students_df = pd.read_csv(STUDENT_FILE)
-      pending_p = students_df[students_df["PhotoStatus"] == "Pending Approval"]
-      if pending_p.empty:
-        st.info("No student profile photographs awaiting approval.")
-      else:
-        for _, p_row in pending_p.iterrows():
-          col_p1, col_p2 = st.columns([1, 2])
-          with col_p1:
-            if p_row["Photo"] and os.path.exists(p_row["Photo"]):
-              st.image(p_row["Photo"], width=120)
+        if save_academic_config:
+            departments = list(dict.fromkeys(
+                line.strip() for line in dept_text.splitlines() if line.strip()
+            ))
+            programs = list(dict.fromkeys(
+                line.strip() for line in program_text.splitlines() if line.strip()
+            ))
+            if not departments or not programs:
+                st.error("At least one department and programme are required.")
             else:
-              st.warning("Photo file missing.")
-          with col_p2:
-            st.write(f"**ID:** {p_row['StudentID']} | **Name:** {p_row['FullName']}")
-            st.write(f"**Campus:** {p_row['Campus']} | **Department:** {p_row['Department']}")
-            if st.button(
-                f"✅ Authorize Photo ({p_row['StudentID']})",
-                key=f"auth_p_{p_row['StudentID']}",
+                set_setting("departments", json.dumps(departments))
+                set_setting("programs", json.dumps(programs))
+                log_event("ACADEMIC_CONFIGURATION_UPDATED")
+                st.success("Academic configuration has been saved.")
+                st.rerun()
+
+        st.markdown("#### Change Your Password")
+        with st.form("admin_change_password_form"):
+            current_password = st.text_input(
+                "Current Password", type="password"
+            )
+            new_password = st.text_input(
+                "New Password", type="password"
+            )
+            confirm_password = st.text_input(
+                "Confirm New Password", type="password"
+            )
+            change_password = st.form_submit_button("Update Password")
+
+        if change_password:
+            account = query_one(
+                "SELECT password_hash FROM users WHERE username = ?",
+                (st.session_state["username"],),
+            )
+            if not account or not verify_password(
+                current_password, account["password_hash"]
             ):
-              students_df.loc[
-                  students_df["StudentID"] == p_row["StudentID"], "PhotoStatus"
-              ] = "Approved"
-              students_df.to_csv(STUDENT_FILE, index=False)
-              st.success("Photograph authorized successfully!")
-              st.rerun()
-          st.markdown("---")
-
-    with tab3:
-      st.subheader("📋 Online Admission Applications")
-      apps_df = pd.read_csv(APPLICATIONS_FILE)
-      if apps_df.empty:
-        st.info("No online applications.")
-      else:
-        st.dataframe(apps_df, use_container_width=True)
-        sel_app = st.selectbox(
-            "Select App ID to Admit", apps_df["AppID"].tolist()
-        )
-        if st.button("🎓 Convert Applicant to Enrolled Student"):
-          app_row = apps_df[apps_df["AppID"] == sel_app].iloc[0]
-          new_sid = f"HBC/{random.randint(100,999)}/26"
-          new_s = pd.DataFrame([{
-              "StudentID": new_sid,
-              "FullName": app_row["FullName"],
-              "Campus": app_row["Campus"],
-              "Department": app_row["Department"],
-              "ProgramLevel": app_row["ProgramLevel"],
-              "Modality": app_row["Modality"],
-              "Year": "1",
-              "Password": "password123",
-              "Photo": "",
-              "PhotoStatus": "Not Uploaded",
-          }])
-          students_df = pd.read_csv(STUDENT_FILE)
-          students_df = pd.concat([students_df, new_s], ignore_index=True)
-          students_df.to_csv(STUDENT_FILE, index=False)
-          apps_df.loc[apps_df["AppID"] == sel_app, "Status"] = "Admitted"
-          apps_df.to_csv(APPLICATIONS_FILE, index=False)
-          st.success(f"Admitted successfully as {new_sid}!")
-          st.rerun()
-
-    with tab4:
-      st.subheader("👨‍🏫 Staff & Registrar Officers Directory")
-      staff_df = pd.read_csv(STAFF_FILE)
-      if "InstitutionalEmail" not in staff_df.columns:
-        staff_df["InstitutionalEmail"] = ""
-      with st.expander("➕ Register Staff Member", expanded=False):
-        with st.form("add_staff"):
-          st_id = st.text_input("Staff ID")
-          st_name = st.text_input("Full Name")
-          st_role = st.selectbox("Role", STAFF_ROLES)
-          st_campus = st.selectbox("Campus", CAMPUSES + ["All Campuses"])
-          st_dept = st.text_input(
-              "Department / Unit", value="Office of the Registrar"
-          )
-          st_email = st.text_input("Institutional Email")
-          st_pass = st.text_input("Password", type="password")
-          if st.form_submit_button("Save Staff Profile"):
-            if st_id and st_name:
-              new_st = pd.DataFrame([{
-                  "StaffID": st_id,
-                  "FullName": st_name,
-                  "Role": st_role,
-                  "Campus": st_campus,
-                  "Department": st_dept,
-                  "InstitutionalEmail": st_email,
-                  "Password": st_pass,
-              }])
-              staff_df = pd.concat([staff_df, new_st], ignore_index=True)
-              staff_df.to_csv(STAFF_FILE, index=False)
-              st.success("Staff profile saved!")
-              st.rerun()
-      if not staff_df.empty:
-        st.dataframe(staff_df, use_container_width=True)
-
-    with tab5:
-      st.subheader("📢 Announcements & Noticeboard")
-      ann_df = pd.read_csv(ANNOUNCE_FILE)
-      st.dataframe(ann_df, use_container_width=True)
-      with st.form("add_ann"):
-        a_title = st.text_input("Notice Title")
-        a_cat = st.selectbox(
-            "Category",
-            ["General Notice", "Exam Schedule", "Registration Deadline"],
-        )
-        a_cont = st.text_area("Content")
-        if st.form_submit_button("Broadcast Notice"):
-          if a_title and a_cont:
-            new_a = pd.DataFrame([{
-                "NoticeID": "".join(random.choices(string.ascii_uppercase, k=5)),
-                "Title": a_title,
-                "Date": pd.Timestamp.now().strftime("%Y-%m-%d"),
-                "Category": a_cat,
-                "Content": a_cont,
-            }])
-            ann_df = pd.concat([ann_df, new_a], ignore_index=True)
-            ann_df.to_csv(ANNOUNCE_FILE, index=False)
-            st.success("Notice broadcasted!")
-            st.rerun()
-
-    with tab6:
-      st.subheader("📚 Departments & Programs")
-      col_d, col_p = st.columns(2)
-      with col_d:
-        st.markdown("**Departments**")
-        st.write(departments_list)
-        with st.form("add_d"):
-          nd = st.text_input("New Department")
-          if st.form_submit_button("Add Dept"):
-            if nd and nd not in departments_list:
-              departments_list.append(nd)
-              pd.DataFrame({"Department": departments_list}).to_csv(
-                  DEPT_FILE, index=False
-              )
-              st.success("Department added!")
-              st.rerun()
-      with col_p:
-        st.markdown("**Programs**")
-        st.write(programs_list)
-        with st.form("add_p"):
-          np_val = st.text_input("New Program Level")
-          if st.form_submit_button("Add Program"):
-            if np_val and np_val not in programs_list:
-              programs_list.append(np_val)
-              pd.DataFrame({"Program": programs_list}).to_csv(
-                  PROG_FILE, index=False
-              )
-              st.success("Program added!")
-              st.rerun()
-
-    with tab7:
-      st.subheader("✅ Pending Grade Submissions Audit")
-      pending_df = pd.read_csv(PENDING_FILE)
-      if pending_df.empty:
-        st.info("No pending grades.")
-      else:
-        st.dataframe(pending_df, use_container_width=True)
-        idx = st.selectbox("Select Pending Index to Authorize", pending_df.index)
-        col_g1, col_g2 = st.columns(2)
-        if col_g1.button("✅ Authorize & Post Grade"):
-          row = pending_df.loc[idx]
-          grades_df = pd.read_csv(GRADES_FILE)
-          grade_val, gp, _ = calculate_grade(row["Score"])
-          final_row = pd.DataFrame([{
-              "StudentID": row["StudentID"],
-              "FullName": row["FullName"],
-              "CourseCode": row["CourseCode"],
-              "CourseName": row["CourseName"],
-              "CreditHour": row["CreditHour"],
-              "Score": row["Score"],
-              "Grade": f"{grade_val} ({gp})",
-              "Level": row.get("Level", "TVET Level I"),
-              "Semester": row["Semester"],
-              "AcademicYear": "2025/2026",
-          }])
-          grades_df = pd.concat([grades_df, final_row], ignore_index=True)
-          grades_df.to_csv(GRADES_FILE, index=False)
-          pending_df = pending_df.drop(idx).reset_index(drop=True)
-          pending_df.to_csv(PENDING_FILE, index=False)
-          st.success("Grade posted successfully!")
-          st.rerun()
-        if col_g2.button("❌ Reject Pending Grade"):
-          pending_df = pending_df.drop(idx).reset_index(drop=True)
-          pending_df.to_csv(PENDING_FILE, index=False)
-          st.warning("Pending grade rejected.")
-          st.rerun()
-
-    with tab8:
-      st.subheader("💰 Student Financial Accounts (ETB)")
-      fin_df = pd.read_csv(FINANCE_FILE)
-      students_df = pd.read_csv(STUDENT_FILE)
-      st.dataframe(fin_df, use_container_width=True)
-      with st.form("fin_form"):
-        f_sid = st.selectbox(
-            "Student ID",
-            students_df["StudentID"].tolist()
-            if not students_df.empty
-            else [],
-        )
-        tot_f = st.number_input("Total Fee (ETB)", value=15000.0)
-        paid_f = st.number_input("Paid (ETB)", value=0.0)
-        stat = st.selectbox("Status", ["Pending Clearance", "Fully Cleared"])
-        if st.form_submit_button("Update Financial Ledger"):
-          if f_sid:
-            if not fin_df.empty and f_sid in fin_df["StudentID"].values:
-              fin_df.loc[
-                  fin_df["StudentID"] == f_sid,
-                  ["TotalFeeETB", "PaidETB", "Status"],
-              ] = [tot_f, paid_f, stat]
+                st.error("The current password is incorrect.")
+            elif len(new_password) < 12:
+                st.error("The new password must contain at least 12 characters.")
+            elif new_password != confirm_password:
+                st.error("The password confirmation does not match.")
             else:
-              new_f = pd.DataFrame([{
-                  "StudentID": f_sid,
-                  "TotalFeeETB": tot_f,
-                  "PaidETB": paid_f,
-                  "Status": stat,
-                  "LastUpdated": pd.Timestamp.now().strftime("%Y-%m-%d"),
-              }])
-              fin_df = pd.concat([fin_df, new_f], ignore_index=True)
-            fin_df.to_csv(FINANCE_FILE, index=False)
-            st.success("Financial ledger updated!")
-            st.rerun()
-
-    with tab9:
-      st.subheader("🖨️ Official Academic Credential Issuance (Single Page Layout)")
-      students_df = pd.read_csv(STUDENT_FILE)
-      if not students_df.empty:
-        sel_s = st.selectbox(
-            "Select Student for Credential",
-            students_df["StudentID"] + " - " + students_df["FullName"],
-        )
-        sel_sid = sel_s.split(" - ")[0]
-        s_info = students_df[students_df["StudentID"] == sel_sid].iloc[0]
-        doc_type = st.selectbox(
-            "Document Type",
-            [
-                "Official Academic Transcript",
-                "Temporary Grade Report",
-                "Official TVET Diploma Certificate",
-            ],
-        )
-
-        fin_df = pd.read_csv(FINANCE_FILE)
-        is_cleared = True
-        if not fin_df.empty:
-          chk = fin_df[fin_df["StudentID"] == sel_sid]
-          if not chk.empty and chk.iloc[0]["Status"] != "Fully Cleared":
-            is_cleared = False
-
-        if not is_cleared and doc_type in [
-            "Official Academic Transcript",
-            "Official TVET Diploma Certificate",
-        ]:
-          st.error(
-              "⚠️ Financial Clearance Required: Outstanding balance in ETB."
-          )
-        else:
-          auth_code = generate_auth_code()
-          grades_df = pd.read_csv(GRADES_FILE)
-          s_grades = grades_df[grades_df["StudentID"] == sel_sid]
-
-          p_b64_tag = ""
-          s_photo = s_info.get("Photo", "")
-          if (
-              isinstance(s_photo, str)
-              and s_photo != ""
-              and os.path.exists(s_photo)
-          ):
-            with open(s_photo, "rb") as image_file:
-              encoded_string = base64.b64encode(image_file.read()).decode()
-            p_b64_tag = f'<img src="data:image/png;base64,{encoded_string}" style="width:65px; height:80px; border:1px solid #111; object-fit: cover; float: right;" />'
-
-          if doc_type == "Official TVET Diploma Certificate":
-            st.markdown(
-                f"""
-                    <div class="single-page-doc" style="border: 6px double #1e3a8a; padding: 25px; background: #fffdfa; text-align: center; color: #111;">
-                        <h2 style="color: #1e3a8a; margin: 0; font-size: 22px;">HANEK TECHNOLOGY AND BUSINESS COLLEGE</h2>
-                        <p style="margin: 2px 0; font-size: 12px; font-weight: bold; color: #555;">OFFICE OF THE REGISTRAR</p>
-                        <p style="margin: 2px 0; font-size: 10px; color: #444;">Tel: +251-46-180-3164 / +251916747538 | P.O. Box 23, Wolaita Sodo, Ethiopia</p>
-                        <hr style="border: 1px solid #1e3a8a; width: 50%; margin: 10px auto;">
-                        <h3 style="margin: 8px 0; font-size: 16px; text-transform: uppercase;">TVET LEVEL IV DIPLOMA</h3>
-                        <p style="font-size: 12px; font-style: italic; margin: 4px 0;">This is to certify that</p>
-                        <h1 style="font-size: 24px; color: #0f172a; margin: 4px 0; text-transform: uppercase;">{s_info['FullName']}</h1>
-                        <p style="font-size: 11.5px; line-height: 1.4; max-width: 700px; margin: 8px auto;">
-                            having successfully completed the prescribed training program and fulfilled all requirements under the Department of <b>{s_info['Department']}</b>, is hereby awarded the <b>LEVEL IV DIPLOMA</b>.
-                        </p>
-                        <table style="width: 75%; margin: 10px auto; font-size: 11px; text-align: center;">
-                            <tr>
-                                <td><b>Student ID:</b> {sel_sid}</td>
-                                <td><b>Admission Year:</b> 2026</td>
-                                <td><b>Medium:</b> English</td>
-                            </tr>
-                        </table>
-                        <div style="display: flex; justify-content: space-between; margin-top: 25px; padding: 0 30px; font-size: 11px;">
-                            <div style="text-align: left;">
-                                <p style="margin: 2px 0;"><b>Auth Code:</b> <span style="color: blue; font-family: monospace;">{auth_code}</span></p>
-                            </div>
-                            <div style="text-align: right;">
-                                <p style="margin: 0 0 15px 0;">___________________________</p>
-                                <p style="margin: 0; font-weight: bold;">Head Registrar Signature</p>
-                            </div>
-                        </div>
-                    </div>
-                """,
-                unsafe_allow_html=True,
-            )
-          else:
-            st.markdown(
-                f"""
-                    <div class="single-page-doc" style="border: 2px solid #111; padding: 15px; background: white; font-family: sans-serif; font-size: 10px; color: #000;">
-                        <div style="text-align: center; border-bottom: 2px solid #111; padding-bottom: 5px; margin-bottom: 6px;">
-                            {p_b64_tag}
-                            <h2 style="margin: 0; font-size: 14px; font-weight: bold;">HANEK TECHNOLOGY AND BUSINESS COLLEGE</h2>
-                            <h4 style="margin: 2px 0; font-size: 10px; color: #333;">OFFICE OF THE REGISTRAR</h4>
-                            <div style="font-size: 9px; color: #444;">Tel: +251-46-180-3164 | P.O. Box 23, Wolaita Sodo, Ethiopia | Website: http://www.hanekcollege.edu.et</div>
-                            <div style="font-size: 10.5px; font-weight: bold; margin-top: 2px; text-transform: uppercase; color: #1e3a8a;">{doc_type}</div>
-                        </div>
-                        <table style="width: 100%; margin-bottom: 6px; font-size: 10px;">
-                            <tr>
-                                <td><b>Student Name:</b> {s_info['FullName']}</td>
-                                <td><b>Student ID:</b> {sel_sid}</td>
-                                <td><b>Admission Year:</b> 2026</td>
-                            </tr>
-                            <tr>
-                                <td><b>Department:</b> {s_info['Department']}</td>
-                                <td><b>Program:</b> {s_info['ProgramLevel']}</td>
-                                <td><b>Medium:</b> English</td>
-                            </tr>
-                        </table>
-                        <table style="width: 100%; border-collapse: collapse; font-size: 9.5px; margin-bottom: 8px;">
-                            <thead>
-                                <tr style="background: #f1f5f9;">
-                                    <th style="border: 1px solid #bbb; padding: 3px;">Level</th>
-                                    <th style="border: 1px solid #bbb; padding: 3px;">Code</th>
-                                    <th style="border: 1px solid #bbb; padding: 3px;">Module Title</th>
-                                    <th style="border: 1px solid #bbb; padding: 3px;">Cr.Hr</th>
-                                    <th style="border: 1px solid #bbb; padding: 3px;">Score</th>
-                                    <th style="border: 1px solid #bbb; padding: 3px;">Grade</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                """,
-                unsafe_allow_html=True,
-            )
-            if s_grades.empty:
-              st.markdown(
-                  '<tr><td colspan="6" style="text-align: center; border: 1px solid #bbb; padding: 5px;">No authorized modules recorded yet.</td></tr>',
-                  unsafe_allow_html=True,
-              )
-            else:
-              for _, g_row in s_grades.iterrows():
-                st.markdown(
-                    f"""
-                        <tr>
-                            <td style="border: 1px solid #bbb; padding: 3px;">{g_row['Level']}</td>
-                            <td style="border: 1px solid #bbb; padding: 3px;">{g_row['CourseCode']}</td>
-                            <td style="border: 1px solid #bbb; padding: 3px;">{g_row['CourseName']}</td>
-                            <td style="border: 1px solid #bbb; padding: 3px;">{g_row['CreditHour']}</td>
-                            <td style="border: 1px solid #bbb; padding: 3px;">{g_row['Score']}</td>
-                            <td style="border: 1px solid #bbb; padding: 3px;">{g_row['Grade']}</td>
-                        </tr>
+                execute(
+                    """
+                    UPDATE users SET password_hash = ?,
+                    must_change_password = 0 WHERE username = ?
                     """,
-                    unsafe_allow_html=True,
+                    (
+                        hash_password(new_password),
+                        st.session_state["username"],
+                    ),
                 )
-            st.markdown(
-                f"""
-                            </tbody>
-                        </table>
-                        <div style="display: flex; justify-content: space-between; border-top: 1px solid #111; padding-top: 5px; font-size: 9.5px;">
-                            <div><b>Auth Code:</b> <span style="color: blue; font-family: monospace;">{auth_code}</span></div>
-                            <div style="text-align: right;"><b>Head Registrar Signature:</b> ___________________</div>
-                        </div>
-                    </div>
-                """,
-                unsafe_allow_html=True,
-            )
+                log_event("PASSWORD_CHANGED")
+                st.success("Your password has been changed.")
+                st.rerun()
 
-    with tab10:
-      st.subheader("⚙️ System Configuration & Health")
-      st.write(f"Total Students: {len(pd.read_csv(STUDENT_FILE))}")
-      st.write(f"Total Staff: {len(pd.read_csv(STAFF_FILE))}")
-      st.write(f"Pending Grades: {len(pd.read_csv(PENDING_FILE))}")
-      st.markdown("---")
-      st.markdown("### Upload Institutional Logo")
-      ul_logo = st.file_uploader("Logo File", type=["png", "jpg", "jpeg"])
-      if ul_logo is not None:
-        with open(LOGO_FILE, "wb") as f:
-          f.write(ul_logo.getbuffer())
-        st.success("Logo uploaded!")
+        st.markdown("#### Audit Trail")
+        audit_df = query_df(
+            """
+            SELECT event_time AS 'Event Time',
+                   username AS Username,
+                   action AS Action,
+                   details AS Details
+            FROM audit_events ORDER BY event_time DESC LIMIT 500
+            """
+        )
+        st.dataframe(audit_df, use_container_width=True, hide_index=True)
+        download_df(audit_df, "hanek_audit_trail.csv")
 
-# --- STAFF PORTAL ---
-elif role == "Staff & Registrar Officers":
-  st.title("👨‍🏫 Staff & Registrar Officers Portal")
-  st_id = st.text_input("Staff ID")
-  st_pass = st.text_input("Password", type="password")
 
-  if st.button("Staff Login"):
-    staff_df = pd.read_csv(STAFF_FILE)
-    match = staff_df[
-        (staff_df["StaffID"] == st_id) & (staff_df["Password"] == st_pass)
-    ]
-    if not match.empty:
-      st.session_state["staff_logged"] = st_id
-      st.session_state["staff_name"] = match.iloc[0]["FullName"]
-      st.session_state["staff_role"] = match.iloc[0]["Role"]
-      st.success(f"Welcome, {match.iloc[0]['Role']} {match.iloc[0]['FullName']}")
-      st.rerun()
-    else:
-      st.error("Invalid Staff Credentials")
+# ============================================================
+# 8. STAFF PORTAL
+# ============================================================
 
-  if "staff_logged" in st.session_state:
-    role_title = st.session_state["staff_role"]
-    st.info(f"Logged in as: {role_title}")
+def render_staff_portal():
+    st.title("Academic and Administrative Staff Portal")
+    role = st.session_state["role"]
+    st.caption(
+        f"Signed in as {st.session_state['display_name']} · "
+        f"{role} · {st.session_state['campus']}"
+    )
 
-    if role_title in ["Instructor / Lecturer", "Department Head"]:
-      st.subheader("Submit Module Grades")
-      students_df = pd.read_csv(STUDENT_FILE)
-      if not students_df.empty:
-        with st.form("grade_sub"):
-          st_target = st.selectbox(
-              "Student",
-              students_df["StudentID"] + " - " + students_df["FullName"],
-          )
-          s_id_sel = st_target.split(" - ")[0]
-          s_name_sel = st_target.split(" - ")[1]
-          lvl = st.selectbox(
-              "Level",
-              [
-                  "TVET Level I",
-                  "TVET Level II",
-                  "TVET Level III",
-                  "TVET Level IV",
-              ],
-          )
-          code = st.text_input("Course Code")
-          cname = st.text_input("Course Name")
-          cred = st.number_input("Credit Hours", value=3)
-          score = st.number_input("Score", min_value=0.0, max_value=100.0, value=75.0)
-
-          if st.form_submit_button("Submit Grade"):
-            pending_df = pd.read_csv(PENDING_FILE)
-            grade_val, gp, _ = calculate_grade(score)
-            new_p = pd.DataFrame([{
-                "PendingID": "".join(random.choices(string.ascii_uppercase, k=5)),
-                "StudentID": s_id_sel,
-                "FullName": s_name_sel,
-                "CourseCode": code,
-                "CourseName": cname,
-                "CreditHour": cred,
-                "Score": score,
-                "Grade": f"{grade_val} ({gp})",
-                "Level": lvl,
-                "Semester": "Semester I",
-                "Instructor": st.session_state["staff_name"],
-            }])
-            pending_df = pd.concat([pending_df, new_p], ignore_index=True)
-            pending_df.to_csv(PENDING_FILE, index=False)
-            st.success("Grade submitted for Head Registrar review!")
-
-# --- STUDENT PORTAL ---
-elif role == "Student Portal":
-  st.title("🎓 Student Portal Login")
-  sid_in = st.text_input("Student ID")
-  spass_in = st.text_input("Password", type="password")
-
-  if st.button("Student Login"):
-    stud_df = pd.read_csv(STUDENT_FILE)
-    match = stud_df[
-        (stud_df["StudentID"] == sid_in) & (stud_df["Password"] == spass_in)
-    ]
-    if not match.empty:
-      st.session_state["student_logged"] = sid_in
-      st.success("Student Login Successful!")
-      st.rerun()
-    else:
-      st.error("Invalid Student ID or Password")
-
-  if "student_logged" in st.session_state:
-    cur_sid = st.session_state["student_logged"]
-    stud_df = pd.read_csv(STUDENT_FILE)
-    s_info = stud_df[stud_df["StudentID"] == cur_sid].iloc[0]
-
-    st.subheader(f"Welcome, {s_info['FullName']}")
-    tab_p, tab_g = st.tabs(["My Profile & Photo Upload", "My Grades"])
-
-    with tab_p:
-      col1, col2 = st.columns([1, 2])
-      with col1:
-        st.markdown("### Profile Photograph")
-        p_path = s_info.get("Photo", "")
-        p_status = s_info.get("PhotoStatus", "Not Uploaded")
-        if p_path and os.path.exists(p_path):
-          st.image(p_path, width=130)
-        else:
-          st.info("No photo uploaded.")
-        st.write(f"**Status:** `{p_status}`")
-
-        up_p = st.file_uploader("Upload New Passport Photo", type=["png", "jpg", "jpeg"])
-        if up_p is not None:
-          saved_path = os.path.join(PHOTO_DIR, f"{cur_sid}.png")
-          with open(saved_path, "wb") as f:
-            f.write(up_p.getbuffer())
-          stud_df.loc[
-              stud_df["StudentID"] == cur_sid, ["Photo", "PhotoStatus"]
-          ] = [saved_path, "Pending Approval"]
-          stud_df.to_csv(STUDENT_FILE, index=False)
-          st.success("Photo uploaded! Awaiting Head Registrar approval.")
-          st.rerun()
-
-      with col2:
-        st.info(
-            f"**ID:** {cur_sid}\n\n**Campus:** {s_info['Campus']}\n\n**Department:** {s_info['Department']}\n\n**Program:** {s_info['ProgramLevel']}"
+    if role in [
+        "Instructor / Lecturer",
+        "Department Head",
+        "Examination Officer",
+    ]:
+        tab_submit, tab_results = st.tabs(
+            ["Grade Submission", "Grade Submission History"]
         )
 
-    with tab_g:
-      grades_df = pd.read_csv(GRADES_FILE)
-      my_g = grades_df[grades_df["StudentID"] == cur_sid]
-      if my_g.empty:
-        st.info("No authorized grades posted yet.")
-      else:
-        st.dataframe(my_g, use_container_width=True)
+        with tab_submit:
+            courses = query_df(
+                """
+                SELECT course_code, course_name, credit_hours, department
+                FROM courses WHERE active = 1 ORDER BY course_name
+                """
+            )
+            ids = student_options()
+            if courses.empty:
+                st.info(
+                    "The course catalogue is empty. Contact the Registrar "
+                    "to establish the approved curriculum."
+                )
+            elif ids:
+                with st.form("staff_grade_submission_form"):
+                    student_label = st.selectbox(
+                        "Student", list(ids.keys())
+                    )
+                    course_options = {
+                        f"{r.course_code} — {r.course_name} "
+                        f"({r.credit_hours} credits)": r.course_code
+                        for r in courses.itertuples()
+                    }
+                    course_label = st.selectbox(
+                        "Course", list(course_options.keys())
+                    )
+                    year = st.text_input(
+                        "Academic Year", value=academic_year()
+                    )
+                    semester = st.selectbox("Semester", SEMESTERS)
+                    score = st.number_input(
+                        "Final Assessment Score",
+                        min_value=0.0,
+                        max_value=100.0,
+                        value=75.0,
+                        step=0.5,
+                    )
+                    submit_grade = st.form_submit_button(
+                        "Submit Grade for Review"
+                    )
 
-# --- GLOBAL DEVELOPER FOOTER ---
-st.markdown("---")
-st.markdown(
-    "<p style='text-align: center; font-size: 13px; color: #1e3a8a;'>Developed by"
-    " <b>Ebirawi Henok Loha</b> | 📱 Phone: <b>+251965514327</b> | ✉️ Email:"
-    " <b>henokebirawi3@gmail.com</b><br><span style='color: #64748b;'>Hanek"
-    " Technology and Business College — Multi-Campus Registrar & SIS ©"
-    " 2026</span></p>",
+                if submit_grade:
+                    sid = ids[student_label]
+                    course_code = course_options[course_label]
+                    course = courses[
+                        courses["course_code"] == course_code
+                    ].iloc[0]
+                    student = get_student(sid)
+
+                    if (
+                        role == "Instructor / Lecturer"
+                        and st.session_state["department"]
+                        and st.session_state["department"] not in [
+                            student["department"], "All Departments"
+                        ]
+                    ):
+                        st.error(
+                            "Your account is not authorized to submit grades "
+                            "for this student's department."
+                        )
+                    else:
+                        letter, point = calculate_grade(score)
+                        try:
+                            execute(
+                                """
+                                INSERT INTO grades (
+                                    grade_id, student_id, course_code,
+                                    course_name, credit_hours, score,
+                                    letter_grade, grade_point, academic_year,
+                                    semester, instructor, status, submitted_at
+                                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending', ?)
+                                """,
+                                (
+                                    make_id("GRD"),
+                                    sid,
+                                    course_code,
+                                    course["course_name"],
+                                    float(course["credit_hours"]),
+                                    float(score),
+                                    letter,
+                                    point,
+                                    year.strip(),
+                                    semester,
+                                    st.session_state["display_name"],
+                                    now_string(),
+                                ),
+                            )
+                            log_event("GRADE_SUBMITTED", f"{sid}:{course_code}")
+                            st.success(
+                                f"Grade {letter} submitted for administrative review."
+                            )
+                            st.rerun()
+                        except sqlite3.IntegrityError:
+                            st.error(
+                                "The grade could not be saved. Verify the "
+                                "student and course records."
+                            )
+
+        with tab_results:
+            history = query_df(
+                """
+                SELECT grade_id AS 'Grade Reference',
+                       student_id AS 'Student ID',
+                       course_code AS 'Course Code',
+                       score AS Score,
+                       letter_grade AS Grade,
+                       status AS Status,
+                       submitted_at AS 'Submitted At'
+                FROM grades WHERE instructor = ?
+                ORDER BY submitted_at DESC
+                """,
+                (st.session_state["display_name"],),
+            )
+            st.dataframe(history, use_container_width=True, hide_index=True)
+
+    elif role in [
+        "Admissions Officer",
+        "Assistant Registrar",
+        "Registrar Officer",
+        "Head Registrar",
+    ]:
+        st.subheader("Admissions and Registrar Work Queue")
+        apps = query_df(
+            """
+            SELECT application_id AS Reference, full_name AS Applicant,
+                   campus AS Campus, department AS Department,
+                   program AS Programme, status AS Status,
+                   submitted_at AS 'Submitted At'
+            FROM applications ORDER BY submitted_at DESC
+            """
+        )
+        st.dataframe(apps, use_container_width=True, hide_index=True)
+        st.info(
+            "For admission decisions and official record creation, "
+            "use the authorized institutional workflow."
+        )
+    else:
+        st.info(
+            "Your account does not have a specialized workspace configured. "
+            "Contact the system administrator if additional access is required."
+        )
+
+
+# ============================================================
+# 9. STUDENT PORTAL
+# ============================================================
+
+def render_student_portal():
+    st.title("Student Self-Service Portal")
+
+    # Student accounts must be explicitly provisioned by authorized staff.
+    # A staff login does not confer student privileges.
+    student_id = st.session_state.get("student_view_id", "")
+
+    if not student_id:
+        st.info(
+            "Student self-service access must be linked to a verified student "
+            "account by the Registrar. This deployment does not yet provide "
+            "a separate student password provisioning workflow."
+        )
+        return
+
+    student = get_student(student_id)
+    if not student:
+        st.error("The linked student record could not be found.")
+        return
+
+    st.subheader(f"Welcome, {student['full_name']}")
+    st.caption(
+        f"Student ID: {student['student_id']} · "
+        f"Campus: {student['campus']}"
+    )
+
+    profile_tab, grades_tab, finance_tab = st.tabs(
+        ["Student Profile", "Academic Results", "Financial Summary"]
+    )
+
+    with profile_tab:
+        p1, p2 = st.columns(2)
+        with p1:
+            st.markdown("#### Personal and Academic Information")
+            st.write(f"**Full Name:** {student['full_name']}")
+            st.write(f"**Student ID:** {student['student_id']}")
+            st.write(f"**Campus:** {student['campus']}")
+            st.write(f"**Department:** {student['department']}")
+            st.write(f"**Programme:** {student['program']}")
+            st.write(f"**Modality:** {student['modality']}")
+            st.write(f"**Status:** {student['status']}")
+        with p2:
+            st.markdown("#### Profile Photograph")
+            if student["photo_path"] and Path(student["photo_path"]).is_file():
+                st.image(student["photo_path"], width=160)
+            else:
+                st.info("No approved profile photograph is available.")
+
+            upload = st.file_uploader(
+                "Submit a Passport Photograph for Review",
+                type=["png", "jpg", "jpeg"],
+                key="student_photo_upload",
+            )
+            if upload is not None:
+                if upload.size > MAX_UPLOAD_MB * 1024 * 1024:
+                    st.error(f"The image must not exceed {MAX_UPLOAD_MB} MB.")
+                else:
+                    try:
+                        from PIL import Image
+                        import io
+
+                        img = Image.open(io.BytesIO(upload.getvalue())).convert("RGB")
+                        target = UPLOAD_DIR / f"{student_id.replace('/', '_')}.jpg"
+                        img.save(target, format="JPEG", quality=90)
+                        execute(
+                            "UPDATE students SET photo_path = ? WHERE student_id = ?",
+                            (str(target), student_id),
+                        )
+                        log_event("STUDENT_PHOTO_UPDATED", student_id)
+                        st.success(
+                            "The photograph has been saved. Administrative "
+                            "verification is required before official use."
+                        )
+                        st.rerun()
+                    except Exception:
+                        st.error("The uploaded image could not be processed.")
+
+    with grades_tab:
+        cgpa, count, credits = grade_summary(student_id)
+        g1, g2, g3 = st.columns(3)
+        g1.metric("Cumulative GPA", f"{cgpa:.2f}")
+        g2.metric("Approved Course Records", count)
+        g3.metric("Credit Hours", f"{credits:.1f}")
+
+        my_grades = query_df(
+            """
+            SELECT course_code AS 'Course Code',
+                   course_name AS 'Course Title',
+                   credit_hours AS 'Credit Hours',
+                   score AS Score,
+                   letter_grade AS Grade,
+                   grade_point AS 'Grade Point',
+                   academic_year AS 'Academic Year',
+                   semester AS Semester
+            FROM grades
+            WHERE student_id = ? AND status = 'Approved'
+            ORDER BY academic_year, semester
+            """,
+            (student_id,),
+        )
+        st.dataframe(my_grades, use_container_width=True, hide_index=True)
+        download_df(my_grades, f"{student_id}_academic_results.csv")
+
+    with finance_tab:
+        balance = current_balance(student_id)
+        if balance is None:
+            st.info("No financial account has been recorded.")
+        else:
+            fin = query_one(
+                "SELECT total_fee, amount_paid FROM finance WHERE student_id = ?",
+                (student_id,),
+            )
+            f1, f2, f3 = st.columns(3)
+            f1.metric("Total Fee (ETB)", f"{fin['total_fee']:,.2f}")
+            f2.metric("Amount Paid (ETB)", f"{fin['amount_paid']:,.2f}")
+            f3.metric("Outstanding Balance (ETB)", f"{balance:,.2f}")
+
+            payments = query_df(
+                """
+                SELECT receipt_number AS 'Receipt Number',
+                       amount AS 'Amount (ETB)',
+                       payment_method AS 'Payment Method',
+                       payment_date AS 'Payment Date'
+                FROM payments WHERE student_id = ?
+                ORDER BY payment_date DESC
+                """,
+                (student_id,),
+            )
+            st.dataframe(payments, use_container_width=True, hide_index=True)
+
+
+# ============================================================
+# 10. MAIN NAVIGATION
+# ============================================================
+
+st.sidebar.markdown(
+    f"""
+    <div style="text-align:center; padding: 12px 0;">
+        <div style="font-size: 36px;">🎓</div>
+        <h3 style="color:white !important; margin-bottom:4px;">
+            HANEK COLLEGE
+        </h3>
+        <div style="font-size:12px; opacity:.85;">
+            Academic and Registrar Portal
+        </div>
+    </div>
+    """,
     unsafe_allow_html=True,
+)
+
+st.sidebar.markdown("---")
+
+if is_logged_in():
+    st.sidebar.success(
+        f"{st.session_state['display_name']}\n\n"
+        f"{st.session_state['role']}"
+    )
+    st.sidebar.caption(
+        f"Campus: {st.session_state['campus']}"
+    )
+    portal = st.sidebar.radio(
+        "Institutional Workspace",
+        [
+            "Institutional Home",
+            "My Workspace",
+        ],
+    )
+    if st.sidebar.button("Sign Out", use_container_width=True):
+        logout()
+
+    if st.session_state.get("role") == "System Administrator":
+        if portal == "Institutional Home":
+            render_public_portal()
+        else:
+            render_admin_dashboard()
+    elif portal == "Institutional Home":
+        render_public_portal()
+    else:
+        render_staff_portal()
+else:
+    portal = st.sidebar.radio(
+        "Portal",
+        [
+            "Institutional Home",
+            "Secure Sign In",
+        ],
+    )
+    if portal == "Institutional Home":
+        render_public_portal()
+    else:
+        login_form()
+
+st.markdown("---")
+st.caption(
+    f"{APP_NAME} · Multi-Campus Academic and Registrar System · "
+    f"Version {APP_VERSION} · © {CURRENT_YEAR}"
 )
