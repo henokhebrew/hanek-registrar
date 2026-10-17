@@ -290,8 +290,8 @@ st.markdown(
 
 # --- SIDEBAR NAVIGATION ---
 st.sidebar.markdown(
-    "<h2 style='text-align: center; color: #1e3a8a; font-weight: 900;'>Hanek"
-    " College</h2>",
+    "<h2 style='text-align: center; color: #1e3a8a; font-weight:"
+    " 900;'>Hanek College</h2>",
     unsafe_allow_html=True,
 )
 st.sidebar.markdown(
@@ -369,8 +369,8 @@ if role == "Home / Public Announcements":
     )
   with c3:
     st.error(
-        "**🎓 Student Portal**\n\nAccess semester grades, transcripts, and"
-        " profile photo uploads."
+        "**🎓 Student Portal**\n\nAccess academic performance, transcripts, and"
+        " profile photo updates."
     )
 
 # --- ONLINE ADMISSION APPLICATION ---
@@ -453,14 +453,14 @@ elif role == "Admin / Registrar":
         "Departments & Programs",
         "Grade Approvals",
         "Financial Accounts",
-        "Document Printing",
+        "Official Credential Printing",
         "System Settings & Logs",
     ])
 
     departments_list = get_departments()
     programs_list = get_programs()
 
-    # TAB 1: STUDENT RECORDS (CRUD)
+    # TAB 1: STUDENT RECORDS (CRUD + ADMIN PHOTO UPLOAD)
     with tab1:
       st.subheader("🎓 Student Record Management (CRUD)")
       students_df = pd.read_csv(STUDENT_FILE)
@@ -503,19 +503,60 @@ elif role == "Admin / Registrar":
                 st.rerun()
 
       st.markdown("---")
-      st.markdown("### Existing Student Database (Edit / Delete)")
+      st.markdown(
+          "### Existing Student Database (Edit Records & Admin Photo Assignment)"
+      )
       if students_df.empty:
         st.info("No student records found.")
       else:
         st.dataframe(students_df, use_container_width=True)
         sel_edit_student = st.selectbox(
-            "Select Student ID to Edit or Delete",
+            "Select Student ID for Editing / Direct Photo Upload",
             students_df["StudentID"].tolist(),
         )
         if sel_edit_student:
           st_row = students_df[
               students_df["StudentID"] == sel_edit_student
           ].iloc[0]
+
+          # Admin Direct Photo Upload Section
+          with st.container():
+            st.markdown(
+                f"**📸 Direct Admin Photo Assignment for:** `{sel_edit_student}`"
+                f" ({st_row['FullName']})"
+            )
+            curr_p = st_row.get("Photo", "")
+            c_p1, c_p2 = st.columns([1, 2])
+            with c_p1:
+              if (
+                  isinstance(curr_p, str)
+                  and curr_p != ""
+                  and os.path.exists(curr_p)
+              ):
+                st.image(curr_p, width=100)
+              else:
+                st.info("No photo assigned.")
+            with c_p2:
+              adm_up_photo = st.file_uploader(
+                  "Upload Passport Photo (Admin Direct)",
+                  type=["png", "jpg", "jpeg"],
+                  key=f"adm_photo_{sel_edit_student}",
+              )
+              if adm_up_photo is not None:
+                saved_p = os.path.join(PHOTO_DIR, f"{sel_edit_student}.png")
+                with open(saved_p, "wb") as f:
+                  f.write(adm_up_photo.getbuffer())
+                students_df.loc[
+                    students_df["StudentID"] == sel_edit_student,
+                    ["Photo", "PhotoStatus"],
+                ] = [saved_p, "Approved"]
+                students_df.to_csv(STUDENT_FILE, index=False)
+                st.success(
+                    "Student photo uploaded and automatically approved by"
+                    " Admin!"
+                )
+                st.rerun()
+
           with st.form("edit_student_form"):
             e_name = st.text_input("Full Name", value=st_row["FullName"])
             e_campus = st.selectbox(
@@ -973,18 +1014,18 @@ elif role == "Admin / Registrar":
             st.success("Financial records updated successfully!")
             st.rerun()
 
-    # TAB 9: DOCUMENT PRINTING
+    # TAB 9: OFFICIAL CREDENTIAL PRINTING (ADMIN ONLY)
     with tab9:
       st.subheader(
-          "🖨️ Official Ethiopian University Standard Transcript & Diploma"
-          " Generator"
+          "🖨️ Official Ethiopian University Standard Credential Generation &"
+          " Printing (Admin Office)"
       )
       students_df = pd.read_csv(STUDENT_FILE)
       if students_df.empty:
         st.info("No students available in the system.")
       else:
         target_s = st.selectbox(
-            "Select Student for Official Document Generation",
+            "Select Student for Official Document Issuance",
             students_df["StudentID"]
             + " - "
             + students_df["FullName"]
@@ -1017,8 +1058,8 @@ elif role == "Admin / Registrar":
         ]:
           st.error(
               "⚠️ Financial Clearance Required: This student has an unpaid"
-              " balance in ETB. Official transcripts and diplomas are locked"
-              " until financial clearance is fully settled."
+              " balance in ETB. Official credentials are locked until"
+              " clearance is fully settled."
           )
         else:
           auth_code = generate_auth_code()
@@ -1284,8 +1325,8 @@ elif role == "Admin / Registrar":
             )
 
           st.info(
-              "💡 **Standard Print Tip:** Press `Ctrl + P` (or use browser share"
-              " menu on mobile) and select **Landscape** orientation."
+              "🖨️ **Admin Print Authorization:** Press `Ctrl + P` to print this"
+              " official document in **Landscape** orientation."
           )
 
     # TAB 10: SYSTEM SETTINGS & LOGS
@@ -1486,10 +1527,11 @@ elif role == "Student Portal":
 
     st.title(f"🎓 Student Portal: {student_info['FullName']}")
 
-    tab_profile, tab_grades, tab_transcript = st.tabs([
-        "Student Profile & Photo Upload",
-        "Grade Report",
-        "Smart Documents & Printing",
+    # PROFESSIONAL ACADEMIC TERMINOLOGY FOR STUDENT TABS
+    tab_profile, tab_grades, tab_credentials = st.tabs([
+        "Student Profile",
+        "Academic Performance",
+        "Official Credentials & Verification",
     ])
 
     with tab_profile:
@@ -1524,7 +1566,7 @@ elif role == "Student Portal":
           ] = [saved_path, "Pending Approval"]
           stud_df.to_csv(STUDENT_FILE, index=False)
           st.success(
-              "Photo uploaded successfully! Awaiting Admin approval."
+              "Photo uploaded successfully! Awaiting Registrar approval."
           )
           st.rerun()
 
@@ -1553,7 +1595,7 @@ elif role == "Student Portal":
           )
 
     with tab_grades:
-      st.subheader("My Course Grades")
+      st.subheader("Academic Performance & Course Grades")
       grades_df = pd.read_csv(GRADES_FILE)
       my_grades = grades_df[grades_df["StudentID"] == current_sid]
       if my_grades.empty:
@@ -1561,11 +1603,16 @@ elif role == "Student Portal":
       else:
         st.dataframe(my_grades, use_container_width=True)
 
-    with tab_transcript:
-      st.subheader(
-          "Official Ethiopian University Standard Transcript & Diploma"
-          " Generator"
+    with tab_credentials:
+      st.subheader("Official Academic Credentials & Verification")
+      st.write(
+          "Here you can view your official academic transcripts and grade"
+          " reports. For security and anti-forgery compliance, **direct"
+          " printing of official transcripts, temporary grade reports, and"
+          " diplomas is exclusively restricted to the Office of the Registrar."
+          "** You may save or download a secure digital copy for your records."
       )
+
       doc_type = st.radio(
           "Select Official Document Type",
           [
@@ -1587,8 +1634,8 @@ elif role == "Student Portal":
           "Official TVET Diploma Certificate",
       ]:
         st.error(
-            "⚠️ Document generation is locked pending financial clearance."
-            " Please settle your tuition balance (ETB)."
+            "⚠️ Document access is locked pending financial clearance. Please"
+            " settle your tuition balance (ETB)."
         )
       else:
         auth_code = generate_auth_code()
@@ -1612,10 +1659,6 @@ elif role == "Student Portal":
           st.markdown(
               f"""
                     <style>
-                        @media print {{
-                            @page {{ size: landscape; margin: 10mm; }}
-                            body {{ -webkit-print-color-adjust: exact; }}
-                        }}
                         .diploma-box {{
                             border: 6px double #1e3a8a;
                             padding: 35px;
@@ -1666,10 +1709,6 @@ elif role == "Student Portal":
           st.markdown(
               f"""
                     <style>
-                        @media print {{
-                            @page {{ size: landscape; margin: 8mm; }}
-                            body {{ -webkit-print-color-adjust: exact; }}
-                        }}
                         .transcript-box {{
                             border: 2px solid #111;
                             padding: 15px;
@@ -1838,11 +1877,10 @@ elif role == "Student Portal":
               f"""
                         </div>
 
-                        <div class="t-header"></div>
                         <div class="t-footer">
                             <div>
                                 <p style="margin: 2px 0;"><b>Authentication Code:</b> <span style="color: blue; font-family: monospace;">{auth_code}</span></p>
-                                <p style="margin: 2px 0; font-size: 9.5px; color: #555;">This document is electronically verified by Hanek Technology and Business College Registrar System.</p>
+                                <p style="margin: 2px 0; font-size: 9.5px; color: #555;">Official Academic Record issued by Hanek Technology and Business College. Verify authenticity at the Office of the Registrar.</p>
                             </div>
                             <div style="text-align: right;">
                                 <p style="margin: 12px 0 2px 0;">___________________________</p>
@@ -1854,8 +1892,12 @@ elif role == "Student Portal":
               unsafe_allow_html=True,
           )
 
-        if st.button("🖨️ Print / Save Document"):
-          st.success(f"Document generated with Authentication Code: {auth_code}")
+        # Secure Student Action (Save Copy Only - No Direct Printing for Students)
+        if st.button("💾 Save Secure Digital Record"):
+          st.success(
+              f"Secure digital record generated with Authentication Code:"
+              f" {auth_code}. Presented for student viewing & record keeping."
+          )
 
 # --- DEVELOPER FOOTER BRANDING ---
 st.markdown("---")
