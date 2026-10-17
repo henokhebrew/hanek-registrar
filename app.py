@@ -122,6 +122,7 @@ def init_csvs():
             "Role",
             "Campus",
             "Department",
+            "InstitutionalEmail",
             "Password",
         ]
     ).to_csv(STAFF_FILE, index=False)
@@ -229,9 +230,10 @@ if role == "Home Dashboard":
     st.write(
         "Welcome to the official institutional portal serving Wolaita Sodo,"
         " Basketo Laska, Boloso Bombe, and Jinka campuses. Manage complete"
-        " student admissions, faculty records, academic departments, program"
-        " modalities, grade approvals, financial clearance in Ethiopian Birr"
-        " (ETB), and smart landscape-optimized academic document printing."
+        " student admissions, faculty records with institutional email"
+        " directory, academic departments, program modalities, grade"
+        " approvals, financial clearance in Ethiopian Birr (ETB), and smart"
+        " landscape-optimized academic document printing."
     )
   with col2:
     if os.path.exists(LOGO_FILE):
@@ -244,8 +246,8 @@ if role == "Home Dashboard":
   with c1:
     st.info(
         "**📋 Complete Record Administration**\n\nFull CRUD controls to add,"
-        " edit, rename, and delete student, staff, department, and program"
-        " datasets dynamically."
+        " edit, rename, and delete student, staff (with institutional email),"
+        " department, and program datasets dynamically."
     )
   with c2:
     st.info(
@@ -424,10 +426,12 @@ elif role == "Admin / Registrar":
               st.warning("Student record deleted permanently.")
               st.rerun()
 
-    # TAB 2: STAFF DIRECTORY (CRUD / Edit / Delete / Add)
+    # TAB 2: STAFF DIRECTORY (CRUD / Institutional Emails)
     with tab2:
       st.subheader("Staff & Faculty Directory Management (CRUD)")
       staff_df = pd.read_csv(STAFF_FILE)
+      if "InstitutionalEmail" not in staff_df.columns:
+        staff_df["InstitutionalEmail"] = ""
 
       with st.expander("➕ Add New Staff Member", expanded=False):
         with st.form("add_staff_form"):
@@ -437,6 +441,9 @@ elif role == "Admin / Registrar":
           st_campus = st.selectbox("Assigned Campus", CAMPUSES + ["All Campuses"])
           st_dept = st.selectbox(
               "Department / Unit", departments_list + ["General"]
+          )
+          st_email = st.text_input(
+              "Institutional Email (e.g., name@hanekcollege.edu.et)"
           )
           st_pass = st.text_input("Password", type="password")
 
@@ -451,6 +458,7 @@ elif role == "Admin / Registrar":
                     "Role": st_role,
                     "Campus": st_campus,
                     "Department": st_dept,
+                    "InstitutionalEmail": st_email,
                     "Password": st_pass,
                 }])
                 staff_df = pd.concat([staff_df, new_staff], ignore_index=True)
@@ -496,6 +504,10 @@ elif role == "Admin / Registrar":
                 if s_row["Department"] in (departments_list + ["General"])
                 else 0,
             )
+            es_email = st.text_input(
+                "Institutional Email",
+                value=s_row.get("InstitutionalEmail", ""),
+            )
             es_pass = st.text_input(
                 "Password", value=s_row["Password"], type="password"
             )
@@ -507,8 +519,15 @@ elif role == "Admin / Registrar":
             if up_staff:
               staff_df.loc[
                   staff_df["StaffID"] == sel_edit_staff,
-                  ["FullName", "Role", "Campus", "Department", "Password"],
-              ] = [es_name, es_role, es_campus, es_dept, es_pass]
+                  [
+                      "FullName",
+                      "Role",
+                      "Campus",
+                      "Department",
+                      "InstitutionalEmail",
+                      "Password",
+                  ],
+              ] = [es_name, es_role, es_campus, es_dept, es_email, es_pass]
               staff_df.to_csv(STAFF_FILE, index=False)
               st.success("Staff record updated successfully!")
               st.rerun()
@@ -968,6 +987,9 @@ elif role == "Staff / Instructor":
       st.session_state["staff_name"] = match.iloc[0]["FullName"]
       st.session_state["staff_role"] = match.iloc[0]["Role"]
       st.session_state["staff_dept"] = match.iloc[0]["Department"]
+      st.session_state["staff_email"] = match.get(
+          "InstitutionalEmail", pd.Series([""])
+      ).iloc[0]
       st.success(f"Welcome, {match.iloc[0]['Role']} {match.iloc[0]['FullName']}")
       st.rerun()
     else:
@@ -977,6 +999,10 @@ elif role == "Staff / Instructor":
     st.title(
         f"👨‍🏫 Staff Portal: {st.session_state['staff_name']} ("
         f"{st.session_state['staff_role']})"
+    )
+    st.info(
+        f"📧 **Institutional Email:**"
+        f" {st.session_state.get('staff_email', 'Not Assigned')}"
     )
     st.markdown(
         "### Submit Module Grades (Manual Entry by Instructor)"
