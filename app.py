@@ -1,3 +1,4 @@
+import base64
 import os
 import random
 import string
@@ -235,7 +236,7 @@ def calculate_grade(score):
     return "F", 0.0, 0.0
 
 
-# --- UI STYLING ---
+# --- UI STYLING & PRINT OPTIMIZATION ---
 st.markdown(
     """
     <style>
@@ -275,6 +276,11 @@ st.markdown(
             border-radius: 8px;
             padding: 20px;
             margin-top: 20px;
+        }
+        @media print {
+            body { -webkit-print-color-adjust: exact; }
+            .stSidebar, .stButton, header { display: none !important; }
+            .single-page-doc { page-break-inside: avoid; max-height: 100vh; overflow: hidden; }
         }
     </style>
 """,
@@ -407,7 +413,7 @@ elif role == "Head Registrar & Administration":
   if st.session_state.get("role") == "Admin":
     st.title("🛡️ Head Registrar Control Dashboard")
 
-    # RESTORED ALL 10 ADMINISTRATIVE CONTROL TABS
+    # ALL 10 ADMINISTRATIVE CONTROL TABS
     tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10 = st.tabs([
         "Student Records Master",
         "Photo Approvals",
@@ -518,28 +524,33 @@ elif role == "Head Registrar & Administration":
               st.rerun()
 
     with tab2:
-      st.subheader("🖼️ Student Profile Photo Verification")
+      st.subheader("🖼️ Student Profile Photo Verification & Authorization")
       students_df = pd.read_csv(STUDENT_FILE)
       pending_p = students_df[students_df["PhotoStatus"] == "Pending Approval"]
       if pending_p.empty:
-        st.info("No photos awaiting approval.")
+        st.info("No student profile photographs awaiting approval.")
       else:
         for _, p_row in pending_p.iterrows():
-          st.write(
-              f"Student: {p_row['StudentID']} - {p_row['FullName']} ({p_row['Campus']})"
-          )
-          if p_row["Photo"] and os.path.exists(p_row["Photo"]):
-            st.image(p_row["Photo"], width=120)
-          if st.button(
-              f"✅ Authorize Photo ({p_row['StudentID']})",
-              key=f"auth_p_{p_row['StudentID']}",
-          ):
-            students_df.loc[
-                students_df["StudentID"] == p_row["StudentID"], "PhotoStatus"
-            ] = "Approved"
-            students_df.to_csv(STUDENT_FILE, index=False)
-            st.success("Photo authorized!")
-            st.rerun()
+          col_p1, col_p2 = st.columns([1, 2])
+          with col_p1:
+            if p_row["Photo"] and os.path.exists(p_row["Photo"]):
+              st.image(p_row["Photo"], width=120)
+            else:
+              st.warning("Photo file missing.")
+          with col_p2:
+            st.write(f"**ID:** {p_row['StudentID']} | **Name:** {p_row['FullName']}")
+            st.write(f"**Campus:** {p_row['Campus']} | **Department:** {p_row['Department']}")
+            if st.button(
+                f"✅ Authorize Photo ({p_row['StudentID']})",
+                key=f"auth_p_{p_row['StudentID']}",
+            ):
+              students_df.loc[
+                  students_df["StudentID"] == p_row["StudentID"], "PhotoStatus"
+              ] = "Approved"
+              students_df.to_csv(STUDENT_FILE, index=False)
+              st.success("Photograph authorized successfully!")
+              st.rerun()
+          st.markdown("---")
 
     with tab3:
       st.subheader("📋 Online Admission Applications")
@@ -736,7 +747,7 @@ elif role == "Head Registrar & Administration":
             st.rerun()
 
     with tab9:
-      st.subheader("🖨️ Official Academic Credential Issuance")
+      st.subheader("🖨️ Official Academic Credential Issuance (Single Page Layout)")
       students_df = pd.read_csv(STUDENT_FILE)
       if not students_df.empty:
         sel_s = st.selectbox(
@@ -770,21 +781,124 @@ elif role == "Head Registrar & Administration":
           )
         else:
           auth_code = generate_auth_code()
-          st.markdown(
-              f"""
-                    <div style="border: 3px double #1e3a8a; padding: 25px; background: white; border-radius: 8px; color: #111;">
-                        <h2 style="text-align: center; color: #1e3a8a; margin: 0;">HANEK TECHNOLOGY AND BUSINESS COLLEGE</h2>
-                        <p style="text-align: center; font-size: 12px; color: #555;">Office of the Registrar | P.O. Box 23, Wolaita Sodo, Ethiopia</p>
-                        <hr style="border: 1px solid #1e3a8a;">
-                        <h3 style="text-align: center; text-transform: uppercase;">{doc_type}</h3>
-                        <p><b>Student Name:</b> {s_info['FullName']} &nbsp;&nbsp;|&nbsp;&nbsp; <b>ID:</b> {sel_sid}</p>
-                        <p><b>Department:</b> {s_info['Department']} &nbsp;&nbsp;|&nbsp;&nbsp; <b>Campus:</b> {s_info['Campus']}</p>
-                        <hr>
-                        <p style="text-align: right; margin-top: 30px;"><b>Authentication Code:</b> <span style="color: blue; font-family: monospace;">{auth_code}</span></p>
+          grades_df = pd.read_csv(GRADES_FILE)
+          s_grades = grades_df[grades_df["StudentID"] == sel_sid]
+
+          p_b64_tag = ""
+          s_photo = s_info.get("Photo", "")
+          if (
+              isinstance(s_photo, str)
+              and s_photo != ""
+              and os.path.exists(s_photo)
+          ):
+            with open(s_photo, "rb") as image_file:
+              encoded_string = base64.b64encode(image_file.read()).decode()
+            p_b64_tag = f'<img src="data:image/png;base64,{encoded_string}" style="width:65px; height:80px; border:1px solid #111; object-fit: cover; float: right;" />'
+
+          if doc_type == "Official TVET Diploma Certificate":
+            st.markdown(
+                f"""
+                    <div class="single-page-doc" style="border: 6px double #1e3a8a; padding: 25px; background: #fffdfa; text-align: center; color: #111;">
+                        <h2 style="color: #1e3a8a; margin: 0; font-size: 22px;">HANEK TECHNOLOGY AND BUSINESS COLLEGE</h2>
+                        <p style="margin: 2px 0; font-size: 12px; font-weight: bold; color: #555;">OFFICE OF THE REGISTRAR</p>
+                        <p style="margin: 2px 0; font-size: 10px; color: #444;">Tel: +251-46-180-3164 / +251916747538 | P.O. Box 23, Wolaita Sodo, Ethiopia</p>
+                        <hr style="border: 1px solid #1e3a8a; width: 50%; margin: 10px auto;">
+                        <h3 style="margin: 8px 0; font-size: 16px; text-transform: uppercase;">TVET LEVEL IV DIPLOMA</h3>
+                        <p style="font-size: 12px; font-style: italic; margin: 4px 0;">This is to certify that</p>
+                        <h1 style="font-size: 24px; color: #0f172a; margin: 4px 0; text-transform: uppercase;">{s_info['FullName']}</h1>
+                        <p style="font-size: 11.5px; line-height: 1.4; max-width: 700px; margin: 8px auto;">
+                            having successfully completed the prescribed training program and fulfilled all requirements under the Department of <b>{s_info['Department']}</b>, is hereby awarded the <b>LEVEL IV DIPLOMA</b>.
+                        </p>
+                        <table style="width: 75%; margin: 10px auto; font-size: 11px; text-align: center;">
+                            <tr>
+                                <td><b>Student ID:</b> {sel_sid}</td>
+                                <td><b>Admission Year:</b> 2026</td>
+                                <td><b>Medium:</b> English</td>
+                            </tr>
+                        </table>
+                        <div style="display: flex; justify-content: space-between; margin-top: 25px; padding: 0 30px; font-size: 11px;">
+                            <div style="text-align: left;">
+                                <p style="margin: 2px 0;"><b>Auth Code:</b> <span style="color: blue; font-family: monospace;">{auth_code}</span></p>
+                            </div>
+                            <div style="text-align: right;">
+                                <p style="margin: 0 0 15px 0;">___________________________</p>
+                                <p style="margin: 0; font-weight: bold;">Head Registrar Signature</p>
+                            </div>
+                        </div>
                     </div>
                 """,
-              unsafe_allow_html=True,
-          )
+                unsafe_allow_html=True,
+            )
+          else:
+            st.markdown(
+                f"""
+                    <div class="single-page-doc" style="border: 2px solid #111; padding: 15px; background: white; font-family: sans-serif; font-size: 10px; color: #000;">
+                        <div style="text-align: center; border-bottom: 2px solid #111; padding-bottom: 5px; margin-bottom: 6px;">
+                            {p_b64_tag}
+                            <h2 style="margin: 0; font-size: 14px; font-weight: bold;">HANEK TECHNOLOGY AND BUSINESS COLLEGE</h2>
+                            <h4 style="margin: 2px 0; font-size: 10px; color: #333;">OFFICE OF THE REGISTRAR</h4>
+                            <div style="font-size: 9px; color: #444;">Tel: +251-46-180-3164 | P.O. Box 23, Wolaita Sodo, Ethiopia | Website: http://www.hanekcollege.edu.et</div>
+                            <div style="font-size: 10.5px; font-weight: bold; margin-top: 2px; text-transform: uppercase; color: #1e3a8a;">{doc_type}</div>
+                        </div>
+                        <table style="width: 100%; margin-bottom: 6px; font-size: 10px;">
+                            <tr>
+                                <td><b>Student Name:</b> {s_info['FullName']}</td>
+                                <td><b>Student ID:</b> {sel_sid}</td>
+                                <td><b>Admission Year:</b> 2026</td>
+                            </tr>
+                            <tr>
+                                <td><b>Department:</b> {s_info['Department']}</td>
+                                <td><b>Program:</b> {s_info['ProgramLevel']}</td>
+                                <td><b>Medium:</b> English</td>
+                            </tr>
+                        </table>
+                        <table style="width: 100%; border-collapse: collapse; font-size: 9.5px; margin-bottom: 8px;">
+                            <thead>
+                                <tr style="background: #f1f5f9;">
+                                    <th style="border: 1px solid #bbb; padding: 3px;">Level</th>
+                                    <th style="border: 1px solid #bbb; padding: 3px;">Code</th>
+                                    <th style="border: 1px solid #bbb; padding: 3px;">Module Title</th>
+                                    <th style="border: 1px solid #bbb; padding: 3px;">Cr.Hr</th>
+                                    <th style="border: 1px solid #bbb; padding: 3px;">Score</th>
+                                    <th style="border: 1px solid #bbb; padding: 3px;">Grade</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                """,
+                unsafe_allow_html=True,
+            )
+            if s_grades.empty:
+              st.markdown(
+                  '<tr><td colspan="6" style="text-align: center; border: 1px solid #bbb; padding: 5px;">No authorized modules recorded yet.</td></tr>',
+                  unsafe_allow_html=True,
+              )
+            else:
+              for _, g_row in s_grades.iterrows():
+                st.markdown(
+                    f"""
+                        <tr>
+                            <td style="border: 1px solid #bbb; padding: 3px;">{g_row['Level']}</td>
+                            <td style="border: 1px solid #bbb; padding: 3px;">{g_row['CourseCode']}</td>
+                            <td style="border: 1px solid #bbb; padding: 3px;">{g_row['CourseName']}</td>
+                            <td style="border: 1px solid #bbb; padding: 3px;">{g_row['CreditHour']}</td>
+                            <td style="border: 1px solid #bbb; padding: 3px;">{g_row['Score']}</td>
+                            <td style="border: 1px solid #bbb; padding: 3px;">{g_row['Grade']}</td>
+                        </tr>
+                    """,
+                    unsafe_allow_html=True,
+                )
+            st.markdown(
+                f"""
+                            </tbody>
+                        </table>
+                        <div style="display: flex; justify-content: space-between; border-top: 1px solid #111; padding-top: 5px; font-size: 9.5px;">
+                            <div><b>Auth Code:</b> <span style="color: blue; font-family: monospace;">{auth_code}</span></div>
+                            <div style="text-align: right;"><b>Head Registrar Signature:</b> ___________________</div>
+                        </div>
+                    </div>
+                """,
+                unsafe_allow_html=True,
+            )
 
     with tab10:
       st.subheader("⚙️ System Configuration & Health")
@@ -892,13 +1006,36 @@ elif role == "Student Portal":
     s_info = stud_df[stud_df["StudentID"] == cur_sid].iloc[0]
 
     st.subheader(f"Welcome, {s_info['FullName']}")
-    tab_p, tab_g = st.tabs(["My Profile", "My Grades"])
+    tab_p, tab_g = st.tabs(["My Profile & Photo Upload", "My Grades"])
 
     with tab_p:
-      st.write(f"**Student ID:** {cur_sid}")
-      st.write(f"**Campus:** {s_info['Campus']}")
-      st.write(f"**Department:** {s_info['Department']}")
-      st.write(f"**Program:** {s_info['ProgramLevel']}")
+      col1, col2 = st.columns([1, 2])
+      with col1:
+        st.markdown("### Profile Photograph")
+        p_path = s_info.get("Photo", "")
+        p_status = s_info.get("PhotoStatus", "Not Uploaded")
+        if p_path and os.path.exists(p_path):
+          st.image(p_path, width=130)
+        else:
+          st.info("No photo uploaded.")
+        st.write(f"**Status:** `{p_status}`")
+
+        up_p = st.file_uploader("Upload New Passport Photo", type=["png", "jpg", "jpeg"])
+        if up_p is not None:
+          saved_path = os.path.join(PHOTO_DIR, f"{cur_sid}.png")
+          with open(saved_path, "wb") as f:
+            f.write(up_p.getbuffer())
+          stud_df.loc[
+              stud_df["StudentID"] == cur_sid, ["Photo", "PhotoStatus"]
+          ] = [saved_path, "Pending Approval"]
+          stud_df.to_csv(STUDENT_FILE, index=False)
+          st.success("Photo uploaded! Awaiting Head Registrar approval.")
+          st.rerun()
+
+      with col2:
+        st.info(
+            f"**ID:** {cur_sid}\n\n**Campus:** {s_info['Campus']}\n\n**Department:** {s_info['Department']}\n\n**Program:** {s_info['ProgramLevel']}"
+        )
 
     with tab_g:
       grades_df = pd.read_csv(GRADES_FILE)
