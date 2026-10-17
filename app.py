@@ -91,6 +91,9 @@ def init_csvs():
     if "PhotoStatus" not in df.columns:
       df["PhotoStatus"] = "Not Uploaded"
       df.to_csv(STUDENT_FILE, index=False)
+    if "Photo" not in df.columns:
+      df["Photo"] = ""
+      df.to_csv(STUDENT_FILE, index=False)
 
   if not os.path.exists(GRADES_FILE):
     pd.DataFrame(
@@ -376,7 +379,7 @@ elif role == "Online Admission Application":
   st.write(
       "Prospective students seeking admission to Hanek Technology and Business"
       " College across **Wolaita Sodo, Basketo Laska, Boloso Bombe, and Jinka**"
-      " campuses may submit their application below[span_0](start_span)[span_0](end_span)[span_1](start_span)[span_1](end_span)."
+      " campuses may submit their application below."
   )
 
   departments_list = get_departments()
@@ -590,7 +593,11 @@ elif role == "Admin / Registrar":
           col_p1, col_p2 = st.columns([1, 2])
           with col_p1:
             p_path = p_row.get("Photo", "")
-            if p_path and os.path.exists(p_path):
+            if (
+                isinstance(p_path, str)
+                and p_path != ""
+                and os.path.exists(p_path)
+            ):
               st.image(p_path, width=150)
             else:
               st.warning("Photo file missing.")
@@ -966,7 +973,7 @@ elif role == "Admin / Registrar":
             st.success("Financial records updated successfully!")
             st.rerun()
 
-    # TAB 9: DOCUMENT PRINTING (EXACT ETHIOPIAN UNIVERSITY STANDARD WITH CONTACTS & LOGO)
+    # TAB 9: DOCUMENT PRINTING
     with tab9:
       st.subheader(
           "🖨️ Official Ethiopian University Standard Transcript & Diploma"
@@ -1018,10 +1025,13 @@ elif role == "Admin / Registrar":
           grades_df = pd.read_csv(GRADES_FILE)
           s_grades = grades_df[grades_df["StudentID"] == sel_sid]
 
-          # Helper to format student photo if available
           p_b64_tag = ""
           s_photo = s_info.get("Photo", "")
-          if s_photo and os.path.exists(s_photo):
+          if (
+              isinstance(s_photo, str)
+              and s_photo != ""
+              and os.path.exists(s_photo)
+          ):
             import base64
 
             with open(s_photo, "rb") as image_file:
@@ -1029,7 +1039,6 @@ elif role == "Admin / Registrar":
             p_b64_tag = f'<img src="data:image/png;base64,{encoded_string}" style="width:75px; height:90px; border:1px solid #111; object-fit: cover; float: right; margin-left: 10px;" />'
 
           if doc_type == "Official TVET Diploma Certificate":
-            # OFFICIAL DIPLOMA CERTIFICATE LAYOUT
             st.markdown(
                 f"""
                         <style>
@@ -1084,7 +1093,6 @@ elif role == "Admin / Registrar":
                 unsafe_allow_html=True,
             )
           else:
-            # OFFICIAL LANDSCAPE MULTI-LEVEL TRANSCRIPT / TEMPO (ETHIOPIAN UNIVERSITY STANDARD)
             st.markdown(
                 f"""
                         <style>
@@ -1277,9 +1285,7 @@ elif role == "Admin / Registrar":
 
           st.info(
               "💡 **Standard Print Tip:** Press `Ctrl + P` (or use browser share"
-              " menu on mobile) and select **Landscape** orientation. The"
-              " layout is optimized to fit all 4 TVET levels and official"
-              " institutional contact details cleanly on a single page."
+              " menu on mobile) and select **Landscape** orientation."
           )
 
     # TAB 10: SYSTEM SETTINGS & LOGS
@@ -1493,7 +1499,11 @@ elif role == "Student Portal":
         photo_path = student_info.get("Photo", "")
         photo_status = student_info.get("PhotoStatus", "Not Uploaded")
 
-        if photo_path and os.path.exists(photo_path):
+        if (
+            isinstance(photo_path, str)
+            and photo_path != ""
+            and os.path.exists(photo_path)
+        ):
           st.image(photo_path, width=150)
         else:
           st.info("No photo uploaded yet.")
@@ -1587,7 +1597,11 @@ elif role == "Student Portal":
 
         p_b64_tag = ""
         s_photo = student_info.get("Photo", "")
-        if s_photo and os.path.exists(s_photo):
+        if (
+            isinstance(s_photo, str)
+            and s_photo != ""
+            and os.path.exists(s_photo)
+        ):
           import base64
 
           with open(s_photo, "rb") as image_file:
@@ -1824,6 +1838,7 @@ elif role == "Student Portal":
               f"""
                         </div>
 
+                        <div class="t-header"></div>
                         <div class="t-footer">
                             <div>
                                 <p style="margin: 2px 0;"><b>Authentication Code:</b> <span style="color: blue; font-family: monospace;">{auth_code}</span></p>
