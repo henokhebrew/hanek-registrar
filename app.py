@@ -910,11 +910,29 @@ elif portal == "College Administration":
                         balance=max(0.0,tuition+other-paid)
                         status="Fully Cleared" if balance<=0 else "Outstanding Balance"
                         mask=(fin["StudentID"]==fsid)&(fin["Level"]==flvl)
-                        newrow=[fsid,flvl,f"{tuition:.2f}",f"{other:.2f}",f"{paid:.2f}",f"{balance:.2f}",status,date.today().isoformat()]
+                        newrow={
+                            "StudentID": fsid,
+                            "Level": flvl,
+                            "TuitionFeeETB": f"{tuition:.2f}",
+                            "OtherFeesETB": f"{other:.2f}",
+                            "PaidETB": f"{paid:.2f}",
+                            "BalanceETB": f"{balance:.2f}",
+                            "Status": status,
+                            "LastUpdated": date.today().isoformat(),
+                        }
+                        # Build/update by column name rather than assigning a positional
+                        # row. Older finance CSV files may contain additional columns;
+                        # positional assignment can raise pandas' mismatched-columns error.
+                        for col in FINANCE_COLUMNS:
+                            if col not in fin.columns:
+                                fin[col] = ""
                         if mask.any():
-                            fin.loc[mask,FINANCE_COLUMNS]=newrow
+                            for col, value in newrow.items():
+                                fin.loc[mask, col] = value
                         else:
-                            fin.loc[len(fin)]=newrow
+                            append_row = {col: "" for col in fin.columns}
+                            append_row.update(newrow)
+                            fin = pd.concat([fin, pd.DataFrame([append_row])], ignore_index=True)
                         save_csv("finance",fin)
                         audit(current_user(),user_role,"Updated student financial account",f"{fsid} / {flvl} / {status}")
                         st.success(f"Financial account saved. Outstanding balance: ETB {balance:,.2f}")
