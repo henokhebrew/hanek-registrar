@@ -244,6 +244,14 @@ def current_role():
 def is_admin():
     return current_role() in ("College Administrator", "System Owner")
 
+def configured_secret(name, default=""):
+    """Read a credential setting from Streamlit secrets, then environment variables."""
+    try:
+        value = st.secrets.get(name, "")
+    except Exception:
+        value = ""
+    return str(value or os.environ.get(name, default) or "")
+
 def make_brand():
     st.markdown(
         f"""
@@ -348,6 +356,12 @@ if portal == "Home / About / Contact":
         st.write("**Email:** registrar@hanekcollege.edu.et")
         st.write("**Website:** http://www.hanekcollege.edu.et")
         st.caption("Please verify institutional contact details before publishing them as official contact information.")
+        st.markdown("---")
+        st.markdown("#### Software Developer and Technical Support")
+        st.write("**Developer:** Ebirawi Henok Loha")
+        st.write("**Telephone / WhatsApp:** +251965514327 / +251916070065")
+        st.write("**Email:** henokebirawi3@gmail.com")
+        st.caption("For system licensing, deployment support, technical maintenance, or institutional onboarding, contact the software developer.")
     with tabs[3]:
         st.write("Applicants may submit an online application using the Online Admission portal. Admission remains subject to institutional review and confirmation.")
         st.write("Available academic levels: " + ", ".join(LEVELS))
@@ -394,9 +408,9 @@ elif portal == "College Administration":
             login = st.form_submit_button("Sign in")
         if login:
             # Owner credentials are configured in Streamlit secrets, never embedded in source.
-            owner_name = str(st.secrets.get("HANEK_OWNER_USERNAME",""))
-            owner_password = str(st.secrets.get("HANEK_OWNER_PASSWORD",""))
-            if owner_name and username == owner_name and hmac.compare_digest(password,owner_password):
+            owner_name = configured_secret("HANEK_OWNER_USERNAME")
+            owner_password = configured_secret("HANEK_OWNER_PASSWORD")
+            if owner_name and owner_password and hmac.compare_digest(username, owner_name) and hmac.compare_digest(password, owner_password):
                 st.session_state["username"] = username
                 st.session_state["user_role"] = "System Owner"
                 audit(username,"System Owner","Successful login","Owner account")
@@ -404,19 +418,37 @@ elif portal == "College Administration":
             admins = read_csv("admin",["Username","PasswordHash","Role","Active"])
             match_idx = None
             for idx,row in admins.iterrows():
-                if row.get("Username","") == username and row.get("Active","True").lower() not in ("false","0","no"):
-                    if verify_password(password,row.get("PasswordHash","")):
+                if row.get("Username","") == username and str(row.get("Active","True")).lower() not in ("false","0","no"):
+                    # Support old admin.csv files that stored a Password column or a
+                    # legacy plain-text PasswordHash. Successful legacy logins are upgraded.
+                    stored = row.get("PasswordHash", "") or row.get("Password", "")
+                    if verify_password(password, stored):
                         match_idx = idx
                         break
             if match_idx is not None:
-                if not str(admins.at[match_idx,"PasswordHash"]).startswith("pbkdf2_sha256$"):
-                    admins.at[match_idx,"PasswordHash"] = hash_password(password)
-                    save_csv("admin",admins)
+                stored = str(admins.at[match_idx,"PasswordHash"] or admins.at[match_idx,"Password"] if "Password" in admins.columns else admins.at[match_idx,"PasswordHash"])
+                admins.at[match_idx,"PasswordHash"] = hash_password(password)
+                if "Password" in admins.columns:
+                    admins.at[match_idx,"Password"] = ""
+                save_csv("admin",admins)
                 st.session_state["username"] = username
                 st.session_state["user_role"] = "College Administrator"
-                audit(username,"College Administrator","Successful login","College admin account")
+                audit(username,"College Administrator","Successful login","College admin account; legacy credential format migrated if applicable")
                 st.rerun()
-            st.error("The supplied credentials are invalid.")
+            # Optional emergency recovery account configured by the owner in hosting Secrets.
+            # It is used only when there is no active local administrator account.
+            active_admins = admins[admins.get("Active", pd.Series("True", index=admins.index)).astype(str).str.lower().isin(["true","1","yes"])] if not admins.empty else admins
+            recovery_name = configured_secret("HANEK_ADMIN_USERNAME")
+            recovery_password = configured_secret("HANEK_ADMIN_PASSWORD")
+            if active_admins.empty and recovery_name and recovery_password and hmac.compare_digest(username, recovery_name) and hmac.compare_digest(password, recovery_password):
+                # Bootstrap a durable local administrator record, then authenticate normally.
+                admins.loc[len(admins)] = [recovery_name, hash_password(recovery_password), "College Administrator", "True"]
+                save_csv("admin", admins)
+                st.session_state["username"] = username
+                st.session_state["user_role"] = "College Administrator"
+                audit(username,"College Administrator","Bootstrapped recovery administrator","Created local administrator record from hosting Secrets")
+                st.rerun()
+            st.error("The supplied credentials are invalid. If this is the first login after updating the app, verify the owner/admin credentials in Streamlit Cloud → App settings → Secrets. Existing local CSV accounts may not carry over between deployments.")
     else:
         user_role = st.session_state["user_role"]
         st.success(f"Signed in as {user_role}: {st.session_state['username']}")
@@ -426,7 +458,11 @@ elif portal == "College Administration":
                 st.session_state.pop(key,None)
             st.rerun()
 
+        owner_tools_view = False
         if user_role == "System Owner":
+            st.info("System Owner access is enabled. You can use the full institutional administration workspace below, as well as the separate owner security and licensing tools.")
+            owner_tools_view = st.checkbox("Open System Owner Security & Licensing tools", value=False)
+        if user_role == "System Owner" and owner_tools_view:
             owner_tabs = st.tabs(["Institutional Administration","Owner Security & Licensing","Audit Log"])
             with owner_tabs[0]:
                 st.markdown("### College administrator account")
@@ -455,7 +491,7 @@ elif portal == "College Administration":
             with owner_tabs[1]:
                 st.markdown("### System owner and deployment configuration")
                 st.write("The system owner account is configured through the hosting platform's secret settings. It is separate from college administrator accounts.")
-                st.code("HANEK_OWNER_USERNAME = \"your-owner-username\"\nHANEK_OWNER_PASSWORD = \"a-long-unique-password\"",language="toml")
+                st.code('HANEK_OWNER_USERNAME = "your-owner-username"\nHANEK_OWNER_PASSWORD = "a-long-unique-password"\n# Optional, temporary recovery account only if no active admin exists\nHANEK_ADMIN_USERNAME = "temporary-admin-username"\nHANEK_ADMIN_PASSWORD = "a-long-unique-password"',language="toml")
                 st.warning("Do not publish owner credentials, embed them in app.py, or share them with institutional administrators. Use a unique password and protect the hosting account and source repository.")
                 st.markdown("### Institutional ownership")
                 st.write("Keep your copyright notice and system licence terms in the application and contract. Technical controls alone cannot guarantee that no administrator can copy source code if they have repository or hosting access.")
@@ -1195,4 +1231,4 @@ elif portal == "Student Portal":
                 if mine.empty:st.info("No approved grades are available for the current level.")
                 else:st.dataframe(mine[["Level","CourseCode","CourseName","CreditHour","Score","Grade","Semester","AcademicYear"]],use_container_width=True)
 
-st.markdown("<div class='footer'><strong>HANEK TECHNOLOGY AND BUSINESS COLLEGE</strong><br>Multi-Campus Student Information and Registrar System<br><span class='small-muted'>Institutional system design and development · © 2026 Ebirawi Henok Loha · All rights reserved</span></div>",unsafe_allow_html=True)
+st.markdown("<div class='footer'><strong>HANEK TECHNOLOGY AND BUSINESS COLLEGE</strong><br>Multi-Campus Student Information and Registrar System<br><span class='small-muted'>Software Developer: Ebirawi Henok Loha · Tel: +251965514327 / +251916070065 · Email: henokebirawi3@gmail.com<br>Institutional system design and development · © 2026 Ebirawi Henok Loha · All rights reserved</span></div>",unsafe_allow_html=True)
