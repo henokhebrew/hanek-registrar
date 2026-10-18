@@ -459,6 +459,46 @@ elif portal == "College Administration":
                 st.session_state.pop(key,None)
             st.rerun()
 
+        # College administrators may secure their own account, but cannot modify
+        # the separate System Owner credentials, which are held in hosting Secrets.
+        if user_role == "College Administrator":
+            with st.expander("Account Security — Change Your Username or Password", expanded=False):
+                st.caption("For account protection, verify your current password before making changes. System Owner credentials are managed separately and cannot be changed here.")
+                admins_self = read_csv("admin", ["Username", "PasswordHash", "Role", "Active"])
+                current_admin_username = st.session_state.get("username", "")
+                admin_mask = admins_self["Username"].astype(str) == str(current_admin_username) if not admins_self.empty and "Username" in admins_self.columns else pd.Series(dtype=bool)
+                if admins_self.empty or not admin_mask.any():
+                    st.error("Your administrator account could not be located. Contact the authorised system owner for account recovery.")
+                else:
+                    admin_idx = admins_self.index[admin_mask][0]
+                    with st.form("admin_self_service_security"):
+                        self_current_password = st.text_input("Current password", type="password")
+                        self_new_username = st.text_input("New username", value=current_admin_username)
+                        self_new_password = st.text_input("New password (leave blank to keep the current password)", type="password")
+                        self_confirm_password = st.text_input("Confirm new password", type="password")
+                        save_self_security = st.form_submit_button("Update Account Security")
+                    if save_self_security:
+                        saved_hash = str(admins_self.at[admin_idx, "PasswordHash"] if "PasswordHash" in admins_self.columns else "")
+                        if not verify_password(self_current_password, saved_hash):
+                            st.error("The current password is incorrect. No changes were made.")
+                        elif not self_new_username.strip():
+                            st.error("The username cannot be blank.")
+                        elif self_new_username.strip() != current_admin_username and self_new_username.strip() in admins_self["Username"].astype(str).tolist():
+                            st.error("That username is already in use. Choose another username.")
+                        elif self_new_password and (len(self_new_password) < 12 or self_new_password != self_confirm_password):
+                            st.error("Choose a password of at least 12 characters and enter it identically in both password fields.")
+                        else:
+                            admins_self.at[admin_idx, "Username"] = self_new_username.strip()
+                            if self_new_password:
+                                admins_self.at[admin_idx, "PasswordHash"] = hash_password(self_new_password)
+                            if "Password" in admins_self.columns:
+                                admins_self.at[admin_idx, "Password"] = ""
+                            save_csv("admin", admins_self)
+                            st.session_state["username"] = self_new_username.strip()
+                            audit(self_new_username.strip(), "College Administrator", "Changed own account credentials", f"Username changed: {'yes' if self_new_username.strip() != current_admin_username else 'no'}; password changed: {'yes' if self_new_password else 'no'}")
+                            st.success("Your account security settings have been updated. Please keep your new credentials confidential.")
+                            st.rerun()
+
         owner_tools_view = False
         if user_role == "System Owner":
             st.info("System Owner access is enabled. You can use the full institutional administration workspace below, as well as the separate owner security and licensing tools.")
@@ -760,18 +800,43 @@ elif portal == "College Administration":
                     selected_staff=st.selectbox("Staff account to edit/deactivate",staff["StaffID"].tolist(),key="staff_edit_select")
                     sr=staff[staff["StaffID"]==selected_staff].iloc[0]
                     with st.form("staff_edit_form"):
-                        new_role=st.selectbox("Role",STAFF_ROLES,index=STAFF_ROLES.index(sr["Role"]) if sr["Role"] in STAFF_ROLES else 0)
-                        new_campus=st.selectbox("Campus",CAMPUSES+["All Campuses"],index=(CAMPUSES+["All Campuses"]).index(sr["Campus"]) if sr["Campus"] in CAMPUSES+["All Campuses"] else 0)
+                        st.markdown("#### Edit staff details")
+                        new_staff_id = st.text_input("Staff ID", value=sr["StaffID"])
+                        new_staff_name = st.text_input("Full name", value=sr["FullName"])
+                        new_role=st.selectbox("Institutional role",STAFF_ROLES,index=STAFF_ROLES.index(sr["Role"]) if sr["Role"] in STAFF_ROLES else 0)
+                        new_campus=st.selectbox("Assigned campus",CAMPUSES+["All Campuses"],index=(CAMPUSES+["All Campuses"]).index(sr["Campus"]) if sr["Campus"] in CAMPUSES+["All Campuses"] else 0)
                         new_dept=st.text_input("Department / unit",value=sr["Department"])
                         new_email=st.text_input("Institutional email",value=sr["InstitutionalEmail"])
-                        new_active=st.selectbox("Account status",["True","False"],index=0 if sr["Active"]!="False" else 1)
+                        new_active=st.selectbox("Account status",["Active","Inactive"],index=0 if str(sr["Active"]).lower() in ["true","1","yes","active"] else 1)
                         staff_edit=st.form_submit_button("Save staff changes")
                     if staff_edit:
-                        mask=staff["StaffID"]==selected_staff
-                        staff.loc[mask,["Role","Campus","Department","InstitutionalEmail","Active"]]=[new_role,new_campus,new_dept,new_email,new_active]
-                        save_csv("staff",staff)
-                        audit(current_user(),user_role,"Edited staff account",selected_staff)
-                        st.success("Staff account updated.")
+                        proposed_id = new_staff_id.strip()
+                        proposed_name = new_staff_name.strip()
+                        duplicate_id = proposed_id != selected_staff and proposed_id in staff["StaffID"].astype(str).tolist()
+                        if not proposed_id or not proposed_name:
+                            st.error("Staff ID and full name are required.")
+                        elif duplicate_id:
+                            st.error("That Staff ID is already assigned to another staff member.")
+                        else:
+                            mask=staff["StaffID"].astype(str)==selected_staff
+                            staff.loc[mask, ["StaffID", "FullName", "Role", "Campus", "Department", "InstitutionalEmail", "Active"]] = [proposed_id, proposed_name, new_role, new_campus, new_dept.strip(), new_email.strip(), "True" if new_active == "Active" else "False"]
+                            save_csv("staff",staff)
+                            # Keep the staff member's task-request history linked if their ID changes.
+                            if proposed_id != selected_staff:
+                                task_history = read_csv("task_requests", TASK_REQUEST_COLUMNS)
+                                if not task_history.empty:
+                                    task_history.loc[task_history["StaffID"].astype(str)==selected_staff, "StaffID"] = proposed_id
+                                    task_history.loc[task_history["StaffID"].astype(str)==proposed_id, "StaffName"] = proposed_name
+                                    save_csv("task_requests", task_history)
+                            audit(current_user(),user_role,"Edited staff account",f"{selected_staff} -> {proposed_id}; name/role/contact/status updated")
+                            st.success("Staff record updated successfully.")
+                            st.rerun()
+                    st.warning("For staff who have left the institution, select Inactive rather than deleting their historical account. This prevents further sign-in while preserving accountability.")
+                    if st.button("Deactivate selected staff account", key="deactivate_staff_" + str(selected_staff)):
+                        staff.loc[staff["StaffID"].astype(str)==selected_staff, "Active"] = "False"
+                        save_csv("staff", staff)
+                        audit(current_user(), user_role, "Deactivated staff account", selected_staff)
+                        st.success("Staff account deactivated. The record and its history have been retained.")
                         st.rerun()
                     with st.expander("Reset staff member's password"):
                         with st.form("admin_reset_staff_password"):
@@ -787,10 +852,11 @@ elif portal == "College Administration":
                                 audit(current_user(), user_role, "Reset staff password", selected_staff)
                                 st.success("Staff password reset. Share the temporary password securely and ask the staff member to change it.")
                 tasks=read_csv("task_requests",TASK_REQUEST_COLUMNS)
-                st.markdown("#### Pending staff requests")
+                st.markdown("#### Staff task approvals")
+                st.caption("Review pending requests below. Resolved requests remain in the history for accountability.")
                 todo=tasks[tasks["Status"]=="Pending Review"]
                 if todo.empty:
-                    st.info("No staff task requests are pending.")
+                    st.info("No staff task requests are pending review.")
                 else:
                     st.dataframe(todo,use_container_width=True)
                     taskid=st.selectbox("Request to review",todo["RequestID"].tolist(),key="task_approval_id")
@@ -800,14 +866,30 @@ elif portal == "College Administration":
                         tasks.loc[tasks["RequestID"]==taskid,["Status","ReviewedBy","ReviewNote"]]=["Approved",current_user(),tasknote]
                         save_csv("task_requests",tasks)
                         audit(current_user(),user_role,"Approved staff task request",taskid)
-                        st.success("Request approved. If it involves a record change, apply that change in the relevant authorised administrative section.")
+                        st.success("Request approved. If it requires a record change, complete that change in the relevant authorised administrative section.")
                         st.rerun()
                     if tc2.button("Reject task request"):
                         tasks.loc[tasks["RequestID"]==taskid,["Status","ReviewedBy","ReviewNote"]]=["Rejected",current_user(),tasknote]
                         save_csv("task_requests",tasks)
                         audit(current_user(),user_role,"Rejected staff task request",taskid)
-                        st.warning("Request rejected.")
+                        st.warning("Request rejected and recorded in the audit log.")
                         st.rerun()
+                st.markdown("#### Request history and maintenance")
+                if tasks.empty:
+                    st.info("No staff task requests have been submitted yet.")
+                else:
+                    st.dataframe(tasks.iloc[::-1], use_container_width=True)
+                    resolved = tasks[tasks["Status"].astype(str).isin(["Approved", "Rejected", "Cancelled", "Completed"])]
+                    if not resolved.empty:
+                        resolved_id = st.selectbox("Resolved request", resolved["RequestID"].tolist(), key="resolved_task_request")
+                        st.caption("For record integrity, pending requests cannot be deleted. Resolved requests can be removed from this working list, but the action will be logged. Keep regular backups.")
+                        if st.button("Remove resolved request from working list", key="remove_resolved_task_request"):
+                            request_row = tasks[tasks["RequestID"] == resolved_id].iloc[0]
+                            audit(current_user(), user_role, "Removed resolved staff task request", f"{resolved_id}; staff={request_row['StaffID']}; status={request_row['Status']}; task={request_row['TaskType']}")
+                            tasks = tasks[tasks["RequestID"] != resolved_id]
+                            save_csv("task_requests", tasks)
+                            st.success("Resolved request removed from the working list; an audit event was recorded.")
+                            st.rerun()
             with tabs[5]:
                 st.markdown("### Public Announcements")
                 anns=read_csv("announcements",["NoticeID","Title","Date","Category","Content"])
