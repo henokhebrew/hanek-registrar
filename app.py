@@ -306,67 +306,68 @@ h1{border-bottom:3px solid var(--gold);padding-bottom:.35rem}
 </style>
 """, unsafe_allow_html=True)
 
+PORTAL_OPTIONS = [
+    "Home / About / Contact",
+    "Online Admission",
+    "College Administration",
+    "Staff and Registrar Portal",
+    "Student Portal",
+]
+
+def go_to_portal(portal_name):
+    st.session_state["portal_nav"] = portal_name
+
 with st.sidebar:
     st.markdown("<div style='text-align:center;padding:10px 4px 16px;border-bottom:2px solid #d6a943'><div style='font-size:38px'>🎓</div><div style='font-size:21px;font-weight:900'>HANEK COLLEGE</div><div style='color:#f2d68b;font-size:10px;letter-spacing:1.5px;font-weight:800'>TECHNOLOGY & BUSINESS</div><div style='font-size:11px;margin-top:8px'>Registrar and Student Information System</div></div>", unsafe_allow_html=True)
     if os.path.exists(FILES["logo"]):
         st.image(FILES["logo"], use_container_width=True)
-    portal = st.selectbox("Portal", [
-        "Home / About / Contact",
-        "Online Admission",
-        "College Administration",
-        "Staff and Registrar Portal",
-        "Student Portal",
-    ])
+    st.selectbox("Portal", PORTAL_OPTIONS, key="portal_nav")
+    portal = st.session_state["portal_nav"]
     st.markdown("---")
     st.caption("Secure institutional access • All actions subject to role permissions")
 
 # Public landing page
 if portal == "Home / About / Contact":
     make_brand()
-    students = read_csv("students", STUDENT_COLUMNS)
-    staff = read_csv("staff", STAFF_COLUMNS)
-    applications = read_csv("applications", APPLICATION_COLUMNS)
-    c1,c2,c3 = st.columns(3)
-    for col,label,val in [(c1,"CAMPUSES SERVED","4"),(c2,"ACADEMIC LEVELS","4"),(c3,"SYSTEM PURPOSE","Registrar SIS")]:
+    st.markdown("<div style='text-align:center;margin:0 auto 22px;max-width:780px'><div style='font-size:13px;font-weight:800;letter-spacing:2px;color:#2865b0'>WELCOME TO HANEK</div><h2 style='margin:6px 0'>University Services Portal</h2><p style='color:#64748b;font-size:16px'>Access admission services, student records, and registrar support from one simple portal.</p></div>", unsafe_allow_html=True)
+
+    # Simple service cards inspired by the clean layout of university portals.
+    card_cols = st.columns(3, gap="medium")
+    services = [
+        ("📝", "Apply for Admission", "New applicants can submit an application and follow the admission process.", "Online Admission", "Open Admission"),
+        ("🎓", "Student Portal", "Students can sign in to view their academic information and available services.", "Student Portal", "Student Login"),
+        ("🏛️", "Staff & Registrar", "Authorized staff can access registrar workflows and institutional records.", "Staff and Registrar Portal", "Staff Login"),
+    ]
+    for col, (symbol, title, description, target, button_label) in zip(card_cols, services):
         with col:
-            st.markdown(f"<div class='metric-card'><div class='metric-label'>{label}</div><div class='metric-value'>{val}</div></div>",unsafe_allow_html=True)
-    st.markdown("### Welcome to Hanek Technology and Business College")
-    st.write("The institutional registrar platform supports student admission, level-by-level academic progression, grade administration, financial clearance, staff workflows, and official academic records across the College's campuses.")
-    tabs = st.tabs(["About the College","Public Announcements","Contact the College","Admissions Information"])
-    with tabs[0]:
-        st.markdown("#### About Us")
-        st.write("Hanek Technology and Business College provides technical, vocational, and business-oriented education. This digital platform is designed to support accurate academic records, transparent administrative workflows, and consistent registrar services across campuses.")
-        st.markdown("#### Academic Structure")
-        st.write("Students progress through Level I, Level II, Level III, and Level IV. Regular and Extension are study modalities, not academic levels. Progression to the next level requires completion of the current level and institutional approval.")
-        st.markdown("#### Campuses")
-        st.write(", ".join(CAMPUSES))
-        st.markdown("#### Departments")
-        for d in get_departments():
-            st.write("• " + d)
-    with tabs[1]:
-        announcements = read_csv("announcements", ["NoticeID","Title","Date","Category","Content"])
-        if announcements.empty:
-            st.info("There are no public announcements at present.")
-        else:
-            for _,n in announcements.iloc[::-1].iterrows():
-                st.markdown(f"<div class='notice'><h4>{safe(n['Title'])}</h4><div class='small-muted'>{safe(n['Date'])} · {safe(n['Category'])}</div><p>{safe(n['Content'])}</p></div>",unsafe_allow_html=True)
-    with tabs[2]:
-        st.markdown("#### Office of the Registrar")
-        st.write("**Headquarters:** Wolaita Sodo, Ethiopia (P.O. Box 23)")
+            st.markdown(
+                f"<div style='height:190px;background:#fff;border:1px solid #dbe4ef;border-radius:13px;padding:22px 18px 12px;text-align:center;box-shadow:0 5px 18px #10213f0b'>"
+                f"<div style='font-size:34px'>{symbol}</div><h3 style='font-size:20px;margin:8px 0;color:#173f78'>{title}</h3>"
+                f"<p style='font-size:13px;color:#64748b;line-height:1.5'>{description}</p></div>",
+                unsafe_allow_html=True,
+            )
+            st.button(button_label, key=f"home_{target}", use_container_width=True, on_click=go_to_portal, args=(target,))
+
+    st.markdown("### Announcements")
+    announcements = read_csv("announcements", ["NoticeID","Title","Date","Category","Content"])
+    if announcements.empty:
+        st.info("There are no public announcements at present.")
+    else:
+        for _, n in announcements.iloc[::-1].head(3).iterrows():
+            st.markdown(f"<div class='notice'><h4>{safe(n['Title'])}</h4><div class='small-muted'>{safe(n['Date'])} · {safe(n['Category'])}</div><p>{safe(n['Content'])}</p></div>", unsafe_allow_html=True)
+
+    with st.expander("About Hanek and its campuses"):
+        st.write("Hanek Technology and Business College's digital platform supports student admission, academic progression, grade administration, financial clearance, staff workflows, and official academic records.")
+        st.write("**Campuses:** " + ", ".join(CAMPUSES))
+        st.write("**Academic levels:** " + ", ".join(LEVELS))
+        st.write("**Study modalities:** " + ", ".join(MODALITIES))
+        st.write("**Departments:** " + ", ".join(get_departments()))
+    with st.expander("Registrar contact and technical support"):
+        st.write("**Office of the Registrar:** Wolaita Sodo, Ethiopia (P.O. Box 23)")
         st.write("**Telephone:** +251-46-180-3164 / +251916747538")
         st.write("**Email:** registrar@hanekcollege.edu.et")
-        st.write("**Website:** http://www.hanekcollege.edu.et")
-        st.caption("Please verify institutional contact details before publishing them as official contact information.")
-        st.markdown("---")
-        st.markdown("#### Software Developer and Technical Support")
-        st.write("**Developer:** Ebirawi Henok Loha")
-        st.write("**Telephone / WhatsApp:** +251965514327 / +251916070065")
-        st.write("**Email:** henokebirawi3@gmail.com")
-        st.caption("For system licensing, deployment support, technical maintenance, or institutional onboarding, contact the software developer.")
-    with tabs[3]:
-        st.write("Applicants may submit an online application using the Online Admission portal. Admission remains subject to institutional review and confirmation.")
-        st.write("Available academic levels: " + ", ".join(LEVELS))
-        st.write("Available modalities: " + ", ".join(MODALITIES))
+        st.caption("Verify all institutional contact details before publishing this portal for public use.")
+        st.markdown("**Software developer and technical support:** Ebirawi Henok Loha · henokebirawi3@gmail.com")
 
 # Online admission
 elif portal == "Online Admission":
