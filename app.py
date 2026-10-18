@@ -6,6 +6,7 @@ import io
 import os
 import secrets
 import string
+import zipfile
 from datetime import date, datetime
 
 import pandas as pd
@@ -488,6 +489,29 @@ elif portal == "College Administration":
                     display_admins = admins.copy()
                     display_admins["PasswordHash"] = "••••••••"
                     st.dataframe(display_admins,use_container_width=True)
+                    st.markdown("#### Change administrator username or reset password")
+                    selected_admin_user = st.selectbox("Administrator account", admins["Username"].tolist(), key="owner_selected_admin")
+                    with st.form("owner_edit_admin_account"):
+                        replacement_username = st.text_input("New administrator username", value=selected_admin_user)
+                        replacement_password = st.text_input("New administrator password (leave blank to keep current)", type="password")
+                        confirm_replacement_password = st.text_input("Confirm new password", type="password")
+                        update_admin_account = st.form_submit_button("Update administrator account")
+                    if update_admin_account:
+                        if not replacement_username.strip():
+                            st.error("The administrator username cannot be blank.")
+                        elif replacement_username.strip() != selected_admin_user and replacement_username.strip() in admins["Username"].tolist():
+                            st.error("That username is already assigned to another administrator.")
+                        elif replacement_password and (len(replacement_password) < 12 or replacement_password != confirm_replacement_password):
+                            st.error("A new password must be at least 12 characters and both entries must match.")
+                        else:
+                            account_mask = admins["Username"] == selected_admin_user
+                            admins.loc[account_mask, "Username"] = replacement_username.strip()
+                            if replacement_password:
+                                admins.loc[account_mask, "PasswordHash"] = hash_password(replacement_password)
+                            save_csv("admin", admins)
+                            audit(current_user(), user_role, "Updated administrator account credentials", f"Account {selected_admin_user} updated; password reset: {'yes' if replacement_password else 'no'}")
+                            st.success("Administrator account updated. Passwords are stored as secure hashes and cannot be viewed in plaintext.")
+                            st.rerun()
             with owner_tabs[1]:
                 st.markdown("### System owner and deployment configuration")
                 st.write("The system owner account is configured through the hosting platform's secret settings. It is separate from college administrator accounts.")
@@ -496,7 +520,23 @@ elif portal == "College Administration":
                 st.markdown("### Institutional ownership")
                 st.write("Keep your copyright notice and system licence terms in the application and contract. Technical controls alone cannot guarantee that no administrator can copy source code if they have repository or hosting access.")
             with owner_tabs[2]:
-                st.dataframe(read_csv("audit",AUDIT_COLUMNS).iloc[::-1],use_container_width=True)
+                st.markdown("### Administrative activity and protected backup")
+                audit_df = read_csv("audit", AUDIT_COLUMNS).iloc[::-1]
+                st.dataframe(audit_df,use_container_width=True)
+                st.download_button("Download audit log (CSV)", data=audit_df.to_csv(index=False).encode("utf-8"), file_name="hanek_audit_log.csv", mime="text/csv")
+                if st.button("Prepare data backup archive"):
+                    backup_buffer = io.BytesIO()
+                    with zipfile.ZipFile(backup_buffer, mode="w", compression=zipfile.ZIP_DEFLATED) as backup_zip:
+                        for filename in list(FILES.values()) + ["students.csv", "grades.csv", "staff.csv", "admin.csv", "finances.csv"]:
+                            if os.path.isfile(filename):
+                                backup_zip.write(filename, arcname=os.path.basename(filename))
+                        if os.path.isdir(PHOTO_DIR):
+                            for root, _, filenames in os.walk(PHOTO_DIR):
+                                for filename in filenames:
+                                    full_path = os.path.join(root, filename)
+                                    backup_zip.write(full_path, arcname=os.path.relpath(full_path, "."))
+                    st.download_button("Download data backup ZIP", data=backup_buffer.getvalue(), file_name=f"hanek_backup_{date.today().isoformat()}.zip", mime="application/zip")
+                st.caption("Backups contain confidential student and staff records. Store them securely and restrict access to authorised personnel.")
         else:
             tabs = st.tabs([
                 "Dashboard","Student Records Master","Level Registration Approvals",
@@ -599,6 +639,37 @@ elif portal == "College Administration":
                         audit(current_user(),user_role,"Edited student record",chosen)
                         st.success("Student record updated.")
                         st.rerun()
+                    st.markdown("#### Update the student's profile photograph")
+                    admin_photo = st.file_uploader("Upload a photograph for the selected student", type=["png", "jpg", "jpeg"], key="admin_student_photo")
+                    if st.button("Save student photograph", key="save_admin_student_photo"):
+                        if admin_photo is None:
+                            st.error("Choose an image file before saving.")
+                        else:
+                            ext = os.path.splitext(admin_photo.name)[1].lower()
+                            if ext not in (".png", ".jpg", ".jpeg"):
+                                ext = ".png"
+                            photo_path = os.path.join(PHOTO_DIR, f"{chosen.replace('/', '_')}{ext}")
+                            with open(photo_path, "wb") as image_file:
+                                image_file.write(admin_photo.getbuffer())
+                            students.loc[students["StudentID"] == chosen, ["Photo", "PhotoStatus"]] = [photo_path, "Approved"]
+                            save_csv("students", students)
+                            audit(current_user(), user_role, "Uploaded or updated student photograph", chosen)
+                            st.success("Student photograph saved and approved.")
+                            st.rerun()
+                    # Passwords are never displayed in plaintext. Authorised staff may reset them.
+                    with st.expander("Reset this student's password"):
+                        with st.form("admin_reset_student_password"):
+                            reset_student_pw = st.text_input("New temporary password (minimum 8 characters)", type="password")
+                            reset_student_confirm = st.text_input("Confirm new temporary password", type="password")
+                            reset_student_submit = st.form_submit_button("Reset student password")
+                        if reset_student_submit:
+                            if len(reset_student_pw) < 8 or reset_student_pw != reset_student_confirm:
+                                st.error("Enter matching passwords of at least 8 characters.")
+                            else:
+                                students.loc[students["StudentID"] == chosen, "PasswordHash"] = hash_password(reset_student_pw)
+                                save_csv("students", students)
+                                audit(current_user(), user_role, "Reset student password", chosen)
+                                st.success("Password reset. Share the temporary password securely with the student and ask them to change it.")
                     confirm_del = st.checkbox("I confirm that this student record should be permanently deleted.",key="confirm_student_delete")
                     if st.button("Delete selected student record",disabled=not confirm_del):
                         students = students[students["StudentID"]!=chosen]
@@ -702,6 +773,19 @@ elif portal == "College Administration":
                         audit(current_user(),user_role,"Edited staff account",selected_staff)
                         st.success("Staff account updated.")
                         st.rerun()
+                    with st.expander("Reset staff member's password"):
+                        with st.form("admin_reset_staff_password"):
+                            reset_staff_pw = st.text_input("New temporary password (minimum 8 characters)", type="password")
+                            reset_staff_confirm = st.text_input("Confirm new temporary password", type="password")
+                            reset_staff_submit = st.form_submit_button("Reset staff password")
+                        if reset_staff_submit:
+                            if len(reset_staff_pw) < 8 or reset_staff_pw != reset_staff_confirm:
+                                st.error("Enter matching passwords of at least 8 characters.")
+                            else:
+                                staff.loc[staff["StaffID"] == selected_staff, "PasswordHash"] = hash_password(reset_staff_pw)
+                                save_csv("staff", staff)
+                                audit(current_user(), user_role, "Reset staff password", selected_staff)
+                                st.success("Staff password reset. Share the temporary password securely and ask the staff member to change it.")
                 tasks=read_csv("task_requests",TASK_REQUEST_COLUMNS)
                 st.markdown("#### Pending staff requests")
                 todo=tasks[tasks["Status"]=="Pending Review"]
@@ -861,16 +945,17 @@ elif portal == "College Administration":
                     clear=balance<=0
                     completed_levels=set(student_grades.loc[student_grades["Grade"]!="F","Level"].tolist())
                     all_levels_complete=all(l in completed_levels for l in LEVELS)
-                    doc_type=st.selectbox("Credential type",["Official Academic Transcript — Level I","Official Academic Transcript — Level II","Official Academic Transcript — Level III","Official Academic Transcript — Level IV","Official TVET Diploma Certificate"])
+                    doc_type=st.selectbox("Credential type",["Official Academic Transcript — Level I","Official Academic Transcript — Level II","Official Academic Transcript — Level III","Official Academic Transcript — Level IV","Comprehensive Academic Transcript — All Levels","Official TVET Diploma Certificate"])
                     is_diploma=doc_type=="Official TVET Diploma Certificate"
-                    target_level=doc_type.rsplit("— ",1)[-1].strip() if not is_diploma else ""
+                    is_comprehensive=doc_type=="Comprehensive Academic Transcript — All Levels"
+                    target_level=doc_type.rsplit("— ",1)[-1].strip() if not (is_diploma or is_comprehensive) else ""
                     if not clear:
                         st.error(f"Credential issuance is blocked until all recorded fees are cleared. Outstanding balance: ETB {balance:,.2f}.")
-                    elif is_diploma and not all_levels_complete:
-                        st.error("The diploma is unavailable until the student has successfully completed Levels I, II, III, and IV.")
+                    elif (is_diploma or is_comprehensive) and not all_levels_complete:
+                        st.error("The diploma and comprehensive transcript are available after successful completion of Levels I, II, III, and IV.")
                     else:
-                        if is_diploma:
-                            credential_grades=student_grades
+                        if is_diploma or is_comprehensive:
+                            credential_grades=student_grades.copy()
                         else:
                             credential_grades=student_grades[student_grades["Level"]==target_level]
                         auth_code=f"HBTC-AUTH-{datetime.now().strftime('%Y')}-{secrets.randbelow(999999)+1:06d}"
@@ -898,13 +983,15 @@ elif portal == "College Administration":
                             <div class="cert-details"><span><b>Date of birth:</b> {safe(dob_text)}</span><span><b>Year of entry:</b> {safe(srow['YearOfEntry'])}</span><span><b>Year of graduation:</b> {safe(grad_year)}</span><span><b>Campus:</b> {safe(srow['Campus'])}</span></div>
                             """
                         else:
-                            body_title=f"OFFICIAL ACADEMIC TRANSCRIPT — {safe(target_level.upper())}"
+                            body_title = ("COMPREHENSIVE ACADEMIC TRANSCRIPT — ALL LEVELS" if is_comprehensive
+                                          else f"OFFICIAL ACADEMIC TRANSCRIPT — {safe(target_level.upper())}")
                             if credential_grades.empty:
-                                grade_rows="<tr><td colspan='7' class='empty-row'>No approved grades are recorded for this level.</td></tr>"
+                                grade_rows = "<tr><td colspan='8' class='empty-row'>No approved grades are recorded.</td></tr>" if is_comprehensive else "<tr><td colspan='7' class='empty-row'>No approved grades are recorded for this level.</td></tr>"
                             else:
                                 grade_rows=""
                                 for _,g in credential_grades.iterrows():
-                                    grade_rows+=f"<tr><td>{safe(g['CourseCode'])}</td><td>{safe(g['CourseName'])}</td><td>{safe(g['CreditHour'])}</td><td>{safe(g['Score'])}</td><td>{safe(g['Grade'])}</td><td>{safe(g['GradePoint'])}</td><td>{safe(g['Semester'])}</td></tr>"
+                                    level_cell = f"<td>{safe(g['Level'])}</td>" if is_comprehensive else ""
+                                    grade_rows+=f"<tr>{level_cell}<td>{safe(g['CourseCode'])}</td><td>{safe(g['CourseName'])}</td><td>{safe(g['CreditHour'])}</td><td>{safe(g['Score'])}</td><td>{safe(g['Grade'])}</td><td>{safe(g['GradePoint'])}</td><td>{safe(g['Semester'])}</td></tr>"
                             credits=pd.to_numeric(credential_grades["CreditHour"],errors="coerce").fillna(0) if not credential_grades.empty else pd.Series(dtype=float)
                             points=pd.to_numeric(credential_grades["GradePoint"],errors="coerce").fillna(0) if not credential_grades.empty else pd.Series(dtype=float)
                             cgpa=(sum(credits*points)/sum(credits)) if len(credits) and sum(credits)>0 else 0
@@ -915,8 +1002,8 @@ elif portal == "College Administration":
                               <span><b>Department:</b> {safe(srow['Department'])}</span><span><b>Modality:</b> {safe(srow['Modality'])}</span>
                               <span><b>Year of entry:</b> {safe(srow['YearOfEntry'])}</span><span><b>Academic year:</b> {safe(srow['AcademicYear'])}</span>
                             </div>
-                            <table class="transcript-table"><thead><tr><th>Course code</th><th>Course title</th><th>Credit hours</th><th>Score</th><th>Grade</th><th>Grade point</th><th>Semester</th></tr></thead><tbody>{grade_rows}</tbody></table>
-                            <div class="summary-row"><span><b>Level:</b> {safe(target_level)}</span><span><b>Total credits:</b> {sum(credits):.1f}</span><span><b>Level GPA:</b> {cgpa:.2f}</span><span><b>Financial status:</b> Fully Cleared</span></div>
+                            <table class="transcript-table"><thead><tr>{'<th>Academic level</th>' if is_comprehensive else ''}<th>Course code</th><th>Course title</th><th>Credit hours</th><th>Score</th><th>Grade</th><th>Grade point</th><th>Semester</th></tr></thead><tbody>{grade_rows}</tbody></table>
+                            <div class="summary-row"><span><b>Scope:</b> {'Levels I–IV' if is_comprehensive else safe(target_level)}</span><span><b>Total credits:</b> {sum(credits):.1f}</span><span><b>{'Cumulative GPA' if is_comprehensive else 'Level GPA'}:</b> {cgpa:.2f}</span><span><b>Financial status:</b> Fully Cleared</span></div>
                             """
                         logo_html=f"<img class='college-logo' src='{logo_uri}' alt='College logo'>" if logo_uri else "<div class='logo-placeholder'>HBTC</div>"
                         photo_html=f"<img class='student-photo' src='{photo_uri}' alt='Student photograph'>" if photo_uri else ""
@@ -931,9 +1018,9 @@ elif portal == "College Administration":
                         .student-photo{{width:62px;height:76px;object-fit:cover;border:1px solid #9aa8ba}}
                         .doc-title{{text-align:center;font-size:14px;font-weight:900;letter-spacing:.7px;color:#173f78;margin:10px 0}}
                         .student-details{{display:grid;grid-template-columns:repeat(4,1fr);gap:7px 12px;font-size:9px;border:1px solid #dbe4ef;padding:8px;background:#f7f9fc}}
-                        .transcript-table{{width:100%;border-collapse:collapse;margin-top:10px;font-size:9px}}
+                        .transcript-table{{width:100%;border-collapse:collapse;margin-top:10px;font-size:{"7px" if is_comprehensive else "9px"}}}
                         .transcript-table th{{background:#173f78;color:white;padding:6px 5px;border:1px solid #173f78;text-align:left}}
-                        .transcript-table td{{border:1px solid #cbd5e1;padding:5px}}
+                        .transcript-table td{{border:1px solid #cbd5e1;padding:{"2px 3px" if is_comprehensive else "5px"}}}
                         .transcript-table tr:nth-child(even){{background:#f7f9fc}}.empty-row{{text-align:center;padding:12px!important}}
                         .summary-row{{display:flex;justify-content:space-between;border:1px solid #dbe4ef;background:#f7f9fc;padding:8px;margin-top:8px;font-size:10px}}
                         .award{{text-align:center;color:#173f78;font-size:23px;font-weight:900;letter-spacing:2px;margin-top:12px}}
@@ -951,40 +1038,45 @@ elif portal == "College Administration":
                         </div></body></html>
                         """
                         st.components.v1.html(doc_html,height=690,scrolling=True)
-                        st.download_button("Save credential as HTML (print-ready landscape A4)",data=doc_html.encode("utf-8"),file_name=f"{sid}_{target_level.replace(' ','_') if target_level else 'Diploma'}_credential.html",mime="text/html")
+                        output_suffix = "Diploma" if is_diploma else ("All_Levels_Transcript" if is_comprehensive else target_level.replace(" ", "_"))
+                        st.download_button("Save credential as HTML (print-ready landscape A4)",data=doc_html.encode("utf-8"),file_name=f"{sid}_{output_suffix}_credential.html",mime="text/html")
                         # Create an editable Excel workbook with landscape A4 page setup.
-                        excel_buffer=io.BytesIO()
-                        with pd.ExcelWriter(excel_buffer,engine="openpyxl") as writer:
-                            info_df=pd.DataFrame([
-                                ["Institution",APP_NAME],["Credential",body_title],["Student ID",sid],
-                                ["Full legal name",srow["FullName"]],["Date of birth",dob_text],
-                                ["Campus",srow["Campus"]],["Department",srow["Department"]],
-                                ["Modality",srow["Modality"]],["Year of entry",srow["YearOfEntry"]],
-                                ["Year of graduation",grad_year if is_diploma else ""],
-                                ["Authentication code",auth_code],["Issue date",date.today().isoformat()],
-                                ["Financial status","Fully Cleared"],["Level GPA",f"{cgpa:.2f}" if not is_diploma else "N/A"]
-                            ])
-                            info_df.to_excel(writer,index=False,header=False,sheet_name="Credential")
-                            ws=writer.sheets["Credential"]
-                            ws.page_setup.orientation="landscape";ws.page_setup.paperSize=ws.PAPERSIZE_A4
-                            ws.page_setup.fitToWidth=1;ws.page_setup.fitToHeight=1;ws.sheet_properties.pageSetUpPr.fitToPage=True
-                            ws.column_dimensions["A"].width=28;ws.column_dimensions["B"].width=65
-                            from openpyxl.styles import Font, PatternFill, Border, Side, Alignment
-                            for r in ws.iter_rows():
-                                for cell in r:
-                                    cell.alignment=Alignment(vertical="center",wrap_text=True)
-                                    if cell.column==1:
-                                        cell.font=Font(bold=True,color="173F78")
-                                        cell.fill=PatternFill("solid",fgColor="EAF0F8")
-                            if not is_diploma:
-                                credential_grades.to_excel(writer,index=False,startrow=len(info_df)+2,sheet_name="Credential")
+                        try:
+                            excel_buffer=io.BytesIO()
+                            with pd.ExcelWriter(excel_buffer,engine="openpyxl") as writer:
+                                info_df=pd.DataFrame([
+                                    ["Institution",APP_NAME],["Credential",body_title],["Student ID",sid],
+                                    ["Full legal name",srow["FullName"]],["Date of birth",dob_text],
+                                    ["Campus",srow["Campus"]],["Department",srow["Department"]],
+                                    ["Modality",srow["Modality"]],["Year of entry",srow["YearOfEntry"]],
+                                    ["Year of graduation",grad_year if is_diploma else ""],
+                                    ["Authentication code",auth_code],["Issue date",date.today().isoformat()],
+                                    ["Financial status","Fully Cleared"],["Level GPA",f"{cgpa:.2f}" if not is_diploma else "N/A"]
+                                ])
+                                info_df.to_excel(writer,index=False,header=False,sheet_name="Credential")
                                 ws=writer.sheets["Credential"]
                                 ws.page_setup.orientation="landscape";ws.page_setup.paperSize=ws.PAPERSIZE_A4
                                 ws.page_setup.fitToWidth=1;ws.page_setup.fitToHeight=1;ws.sheet_properties.pageSetUpPr.fitToPage=True
-                                for col in ws.columns:
-                                    letter=col[0].column_letter
-                                    ws.column_dimensions[letter].width=min(max(max(len(str(c.value or "")) for c in col)+2,12),32)
-                        st.download_button("Save as Excel workbook (A4 landscape)",data=excel_buffer.getvalue(),file_name=f"{sid}_credential.xlsx",mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+                                ws.column_dimensions["A"].width=28;ws.column_dimensions["B"].width=65
+                                from openpyxl.styles import Font, PatternFill, Border, Side, Alignment
+                                for r in ws.iter_rows():
+                                    for cell in r:
+                                        cell.alignment=Alignment(vertical="center",wrap_text=True)
+                                        if cell.column==1:
+                                            cell.font=Font(bold=True,color="173F78")
+                                            cell.fill=PatternFill("solid",fgColor="EAF0F8")
+                                if not is_diploma:
+                                    credential_grades.to_excel(writer,index=False,startrow=len(info_df)+2,sheet_name="Credential")
+                                    ws=writer.sheets["Credential"]
+                                    ws.page_setup.orientation="landscape";ws.page_setup.paperSize=ws.PAPERSIZE_A4
+                                    ws.page_setup.fitToWidth=1;ws.page_setup.fitToHeight=1;ws.sheet_properties.pageSetUpPr.fitToPage=True
+                                    for col in ws.columns:
+                                        letter=col[0].column_letter
+                                        ws.column_dimensions[letter].width=min(max(max(len(str(c.value or "")) for c in col)+2,12),32)
+                            st.download_button("Save as Excel workbook (A4 landscape)",data=excel_buffer.getvalue(),file_name=f"{sid}_{output_suffix}_credential.xlsx",mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+                        except ModuleNotFoundError:
+                            st.error("Excel export is unavailable because the openpyxl package is missing from this deployment. Add openpyxl>=3.1 to requirements.txt in the GitHub repository, commit the file, and reboot the Streamlit app.")
+                            st.download_button("Download grade data as CSV instead", data=credential_grades.to_csv(index=False).encode("utf-8"), file_name=f"{sid}_{output_suffix}_grades.csv", mime="text/csv")
                         st.caption("For a Word/PDF printout, open the print-ready credential in a browser, choose Print, and select A4 landscape. A verification code is generated for this issuance; maintain an issuance register before relying on it for external verification.")
             with tabs[10]:
                 st.markdown("### System configuration and audit")
@@ -1040,7 +1132,23 @@ elif portal == "Staff and Registrar Portal":
             st.rerun()
         tabs=st.tabs(["My Workbench","Submit a Grade","Request an Administrative Action"])
         with tabs[0]:
-            st.write("Staff access is role-based. Student records are limited to the student's currently approved academic level. Staff members cannot directly modify official records from this portal.")
+            st.write("Staff access is role-based. Student records are limited to the authorised campus and department. Staff members cannot directly modify official records from this portal.")
+            with st.expander("Change your staff portal password"):
+                with st.form("staff_change_password"):
+                    old_staff_pw = st.text_input("Current password", type="password")
+                    new_staff_pw = st.text_input("New password (minimum 8 characters)", type="password")
+                    confirm_staff_pw = st.text_input("Confirm new password", type="password")
+                    change_staff_pw = st.form_submit_button("Change password")
+                if change_staff_pw:
+                    staff_data = read_csv("staff", STAFF_COLUMNS)
+                    staff_idx = staff_data.index[staff_data["StaffID"] == sid]
+                    if len(staff_idx) and verify_password(old_staff_pw, staff_data.loc[staff_idx[0], "PasswordHash"]) and len(new_staff_pw) >= 8 and new_staff_pw == confirm_staff_pw:
+                        staff_data.loc[staff_idx[0], "PasswordHash"] = hash_password(new_staff_pw)
+                        save_csv("staff", staff_data)
+                        audit(sid, role, "Changed own password")
+                        st.success("Your password has been changed.")
+                    else:
+                        st.error("The current password is incorrect, or the new passwords do not match / are too short.")
             tasks=read_csv("task_requests",TASK_REQUEST_COLUMNS)
             mine=tasks[tasks["StaffID"]==sid]
             st.markdown("#### My administrative requests")
@@ -1165,6 +1273,22 @@ elif portal == "Student Portal":
                 st.markdown("#### Official student information")
                 for label,key in [("Student ID","StudentID"),("Full legal name","FullName"),("Date of birth","DateOfBirth"),("Campus","Campus"),("Department","Department"),("Current level","ProgramLevel"),("Study modality","Modality"),("Year of entry","YearOfEntry"),("Academic year","AcademicYear"),("Photo status","PhotoStatus")]:
                     st.write(f"**{label}:** {student.get(key,'')}")
+            with st.expander("Change your student portal password"):
+                with st.form("student_change_password"):
+                    old_student_pw = st.text_input("Current password", type="password")
+                    new_student_pw = st.text_input("New password (minimum 8 characters)", type="password")
+                    confirm_student_pw = st.text_input("Confirm new password", type="password")
+                    change_student_pw = st.form_submit_button("Change password")
+                if change_student_pw:
+                    students = read_csv("students", STUDENT_COLUMNS)
+                    row_idx = students.index[students["StudentID"] == sid]
+                    if len(row_idx) and verify_password(old_student_pw, students.loc[row_idx[0], "PasswordHash"]) and len(new_student_pw) >= 8 and new_student_pw == confirm_student_pw:
+                        students.loc[row_idx[0], "PasswordHash"] = hash_password(new_student_pw)
+                        save_csv("students", students)
+                        audit(sid, "Student", "Changed own password")
+                        st.success("Your password has been changed.")
+                    else:
+                        st.error("The current password is incorrect, or the new passwords do not match / are too short.")
         with tabs[1]:
             grades=read_csv("grades",GRADE_COLUMNS)
             my=grades[(grades["StudentID"]==sid)&(grades["Status"]=="Approved")&(grades["Level"]==student["ProgramLevel"])]
