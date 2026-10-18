@@ -499,10 +499,9 @@ elif portal == "College Administration":
                             st.success("Your account security settings have been updated. Please keep your new credentials confidential.")
                             st.rerun()
 
-        owner_tools_view = False
+        owner_tools_view = user_role == "System Owner"
         if user_role == "System Owner":
-            st.info("System Owner access is enabled. You can use the full institutional administration workspace below, as well as the separate owner security and licensing tools.")
-            owner_tools_view = st.checkbox("Open System Owner Security & Licensing tools", value=False)
+            st.info("System Owner Dashboard: institutional administration, administrator account controls, deployment security, audit history, and backups are available in one workspace.")
         if user_role == "System Owner" and owner_tools_view:
             owner_tabs = st.tabs(["Institutional Administration","Owner Security & Licensing","Audit Log"])
             with owner_tabs[0]:
@@ -552,6 +551,29 @@ elif portal == "College Administration":
                             audit(current_user(), user_role, "Updated administrator account credentials", f"Account {selected_admin_user} updated; password reset: {'yes' if replacement_password else 'no'}")
                             st.success("Administrator account updated. Passwords are stored as secure hashes and cannot be viewed in plaintext.")
                             st.rerun()
+
+                    st.markdown("#### Activate or deactivate an administrator")
+                    status_user = st.selectbox(
+                        "Administrator account status",
+                        admins["Username"].tolist(),
+                        key="owner_admin_status_user",
+                    )
+                    status_row = admins[admins["Username"] == status_user].iloc[0]
+                    is_active = str(status_row.get("Active", "True")).strip().lower() in ("true", "1", "yes", "active")
+                    st.caption(f"Current status: {'Active' if is_active else 'Inactive'}")
+                    target_status = "False" if is_active else "True"
+                    status_action = "Deactivate" if is_active else "Activate"
+                    if st.button(f"{status_action} selected administrator", key="owner_toggle_admin_status"):
+                        status_mask = admins["Username"].astype(str) == str(status_user)
+                        admins.loc[status_mask, "Active"] = target_status
+                        save_csv("admin", admins)
+                        audit(
+                            current_user(), user_role,
+                            f"{status_action}d college administrator",
+                            status_user,
+                        )
+                        st.success(f"Administrator account {status_action.lower()}d.")
+                        st.rerun()
             with owner_tabs[1]:
                 st.markdown("### System owner and deployment configuration")
                 st.write("The system owner account is configured through the hosting platform's secret settings. It is separate from college administrator accounts.")
